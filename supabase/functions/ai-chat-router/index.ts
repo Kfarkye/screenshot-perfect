@@ -1,4 +1,4 @@
-import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
+// Edge runtime types are provided by Supabase Deno environment
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 import { encodeBase64 } from "https://deno.land/std@0.208.0/encoding/base64.ts";
@@ -149,26 +149,122 @@ class CircuitBreakerError extends AppError {
   }
 }
 
-// ... rest of implementation follows the same pattern from the provided code ...
-
 Deno.serve(async (req: Request) => {
   const requestStartTime = performance.now();
   const url = new URL(req.url);
+  const ctx = initializeRequestContext(req);
 
   const responseHeaders: Record<string, string> = {
     ...corsHeaders,
     ...SECURITY_HEADERS,
+    'X-Request-ID': ctx.requestId,
+    'X-Trace-ID': ctx.trace.traceId,
   };
 
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: responseHeaders, status: 204 });
   }
 
-  return new Response(JSON.stringify({ 
-    status: 'ok',
-    message: 'AI Chat Router initialized'
-  }), {
-    headers: { ...responseHeaders, 'Content-Type': 'application/json' },
-    status: 200
-  });
+  // Health check endpoint
+  if (req.method === 'GET' && url.pathname.endsWith('/health')) {
+    return handleHealthCheck(responseHeaders);
+  }
+
+  // Only allow POST for chat
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...responseHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  try {
+    // Parse request body
+    const rawBody = await req.json().catch(() => {
+      throw new ValidationError("Invalid JSON payload");
+    });
+
+    log("DEBUG", "[REQUEST] Body parsed", { ctx, bodySize: JSON.stringify(rawBody).length });
+
+    // Validate request
+    const validationResult = RequestBodySchema.safeParse(rawBody);
+    if (!validationResult.success) {
+      log("WARN", "[VALIDATION] Request validation failed", { ctx, errors: validationResult.error.format() });
+      throw new ValidationError("Invalid request structure", validationResult.error.format());
+    }
+
+    const requestData = validationResult.data;
+    const { messages, mode, preferredProvider } = requestData;
+
+    // For now, use simple Gemini call without auth
+    if (!env.GEMINI_API_KEY) {
+      throw new AppError("Gemini API key not configured", 500, "CONFIG_ERROR", false);
+    }
+
+    log("INFO", "[ROUTER] Routing to Gemini", { ctx, messageCount: messages.length });
+
+    // Call Gemini API
+    const geminiMessages = messages.map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : msg.role,
+      parts: [{ text: msg.content }]
+    }));
+
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${env.GEMINI_API_KEY}`;
+    
+    const geminiResponse = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: geminiMessages,
+        generationConfig: { maxOutputTokens: 6000 }
+      })
+    });
+
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text();
+      log("ERROR", "[GEMINI] API error", { ctx, status: geminiResponse.status, error: errorText });
+      throw new ProviderError('gemini', geminiResponse.status, errorText);
+    }
+
+    const geminiData = await geminiResponse.json();
+    const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated';
+
+    const latency = performance.now() - requestStartTime;
+    log("INFO", "[COMPLETE] Request completed successfully", { ctx, latency, provider: 'gemini' });
+
+    return new Response(JSON.stringify({
+      response: responseText,
+      provider: 'gemini',
+      latency
+    }), {
+      status: 200,
+      headers: { ...responseHeaders, 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    const latency = performance.now() - requestStartTime;
+    log("ERROR", "[REQUEST] Request failed", { ctx, error, latency });
+
+    let status = 500;
+    let message = 'Internal server error';
+    let code = 'INTERNAL_ERROR';
+
+    if (error instanceof AppError) {
+      status = error.status;
+      message = error.message;
+      code = error.code;
+    } else if (error instanceof Error) {
+      message = error.message;
+    }
+
+    return new Response(JSON.stringify({
+      error: message,
+      code,
+      requestId: ctx.requestId
+    }), {
+      status,
+      headers: { ...responseHeaders, 'Content-Type': 'application/json' }
+    });
+  }
 });

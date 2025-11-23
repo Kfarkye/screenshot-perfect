@@ -1,1 +1,7 @@
 project_id = "luohiaujigqcjpzicxiz"
+
+[functions.ai-chat-router]
+verify_jwt = false
+
+[functions.test-chat]
+verify_jwt = false
