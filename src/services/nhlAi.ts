@@ -386,7 +386,7 @@ export const initializeChat = (league: League): Chat => {
 };
 
 // Edge function router integration (optional - can be toggled)
-const USE_ROUTER = false; // Set to true to use the edge function router
+const USE_ROUTER = true; // Set to true to use the edge function router
 
 const sendViaRouter = async (userMessage: string, league: League): Promise<string> => {
   try {
