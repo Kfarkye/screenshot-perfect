@@ -72,7 +72,7 @@ export const Auth = () => {
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <TrendingUp className="w-8 h-8 text-accent" />
-            <h1 className="text-4xl font-extrabold tracking-tight">
+            <h1 className="text-4xl font-extrabold tracking-tight text-textPrimary">
               Sharp<span className="text-accent">Edge</span>
             </h1>
           </div>

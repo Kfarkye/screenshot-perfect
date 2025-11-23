@@ -26,8 +26,8 @@ All colors MUST be HSL.
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
@@ -80,9 +80,9 @@ All colors MUST be HSL.
     --muted: 0 0% 12%;
     --muted-foreground: 0 0% 60%;
 
-    /* Accent - White for premium feel */
-    --accent: 0 0% 100%;
-    --accent-foreground: 0 0% 0%;
+    /* Accent - Blue for brand */
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 100%;
 
     /* Destructive - Red for errors */
     --destructive: 0 72% 51%;
