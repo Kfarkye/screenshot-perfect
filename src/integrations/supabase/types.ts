@@ -654,6 +654,45 @@ export type Database = {
           },
         ]
       }
+      analysis_memory: {
+        Row: {
+          confidence_score: number
+          created_at: string
+          game_id: string
+          id: string
+          market_type: Database["public"]["Enums"]["betting_market_type"]
+          odds_at_generation: number | null
+          pick_side: string
+          reasoning_embedding: string | null
+          reasoning_text: string
+          updated_at: string
+        }
+        Insert: {
+          confidence_score: number
+          created_at?: string
+          game_id: string
+          id?: string
+          market_type: Database["public"]["Enums"]["betting_market_type"]
+          odds_at_generation?: number | null
+          pick_side: string
+          reasoning_embedding?: string | null
+          reasoning_text: string
+          updated_at?: string
+        }
+        Update: {
+          confidence_score?: number
+          created_at?: string
+          game_id?: string
+          id?: string
+          market_type?: Database["public"]["Enums"]["betting_market_type"]
+          odds_at_generation?: number | null
+          pick_side?: string
+          reasoning_embedding?: string | null
+          reasoning_text?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       artifact_versions: {
         Row: {
           artifact_id: string
@@ -3675,6 +3714,7 @@ export type Database = {
         | "solver"
         | "verifier_hybrid"
         | "verifier_llm"
+      betting_market_type: "moneyline" | "spread" | "total" | "prop"
       candidate_status:
         | "prospecting"
         | "interested"
@@ -3841,6 +3881,7 @@ export const Constants = {
         "verifier_hybrid",
         "verifier_llm",
       ],
+      betting_market_type: ["moneyline", "spread", "total", "prop"],
       candidate_status: [
         "prospecting",
         "interested",
