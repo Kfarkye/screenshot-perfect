@@ -1,7 +1,10 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import type { GameData, MarketData } from '../types';
-import { Clock, TrendingUp, Activity, Lock, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
+import { Clock, TrendingUp, Activity, Lock, ArrowUp, ArrowDown, AlertTriangle, Sparkles } from 'lucide-react';
+import { PickDisplay } from './PickDisplay';
+import { generatePick } from '../services/pickGenerator';
+import { useToast } from '@/hooks/use-toast';
 
 const observability = {
   trackEvent: (event: string, properties: Record<string, unknown> = {}) => {},
@@ -196,6 +199,9 @@ interface GameCardProps {
 
 export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick }: GameCardProps) => {
   const { id, status, awayTeam, homeTeam, awayRecord, homeRecord, time, odds: allOdds, league } = game;
+  const [pickData, setPickData] = useState(game.pick);
+  const [isGeneratingPick, setIsGeneratingPick] = useState(false);
+  const { toast } = useToast();
   const awayTeamName = awayTeam; 
   const homeTeamName = homeTeam;
 
@@ -251,6 +257,39 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
       if (onBetClick && odds && !boardLocked) onBetClick(id, type, team, odds);
   }, [onBetClick, id, odds, selectedBook, boardLocked]);
 
+  const handleGeneratePick = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (boardLocked) {
+      toast({
+        title: "Markets Closed",
+        description: "Cannot generate picks for concluded games.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingPick(true);
+    
+    try {
+      const pick = await generatePick(game, 'moneyline');
+      setPickData(pick);
+      toast({
+        title: "Pick Generated",
+        description: `${pick.confidence_score}% confidence on ${pick.pick_side}`,
+      });
+    } catch (error) {
+      console.error('Pick generation failed:', error);
+      toast({
+        title: "Generation Failed",
+        description: error instanceof Error ? error.message : "Could not generate pick",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingPick(false);
+    }
+  }, [game, boardLocked, toast]);
+
   return (
     <article
         className="relative overflow-hidden mb-4 rounded-2xl border border-border/20 bg-noise group/card transition-all duration-500 ease-out hover:border-border/40 shadow-glass hover:shadow-md backdrop-blur-sm bg-surface/80 motion-safe:hover:scale-[1.005]"
@@ -299,15 +338,42 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
               )}
             </div>
           </div>
-          {onAnalyze && (
+          <div className="absolute bottom-5 right-5 md:bottom-6 md:right-6 flex gap-2 opacity-0 motion-safe:translate-y-3 group-hover/card:opacity-100 group-hover/card:motion-safe:translate-y-0 transition-all duration-500 ease-out focus-within:opacity-100 focus-within:translate-y-0">
+            {onAnalyze && (
+              <button
+                onClick={handleAnalyzeClick}
+                className="glass-button-vibrant px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-100"
+                style={{ willChange: 'transform, opacity' }}
+              >
+                <TrendingUp size={16} strokeWidth={2.5} className="text-accent" />
+                <span className="text-sm font-bold text-textPrimary">Analyze</span>
+              </button>
+            )}
             <button
-              onClick={handleAnalyzeClick}
-              className="absolute bottom-5 right-5 md:bottom-6 md:right-6 opacity-0 motion-safe:translate-y-3 group-hover/card:opacity-100 group-hover/card:motion-safe:translate-y-0 transition-all duration-500 ease-out glass-button-vibrant px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md hover:shadow-xl focus-visible:opacity-100 focus-visible:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-100"
+              onClick={handleGeneratePick}
+              disabled={isGeneratingPick || boardLocked}
+              className="glass-button-vibrant px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 motion-safe:hover:scale-105 active:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ willChange: 'transform, opacity' }}
             >
-              <TrendingUp size={16} strokeWidth={2.5} className="text-accent" />
-              <span className="text-sm font-bold text-textPrimary">Analyze</span>
+              {isGeneratingPick ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                  <span className="text-sm font-bold text-textPrimary">Generating...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} strokeWidth={2.5} className="text-purple-400" />
+                  <span className="text-sm font-bold text-textPrimary">Get Pick</span>
+                </>
+              )}
             </button>
+          </div>
+          
+          {pickData && !isGeneratingPick && (
+            <PickDisplay pick={pickData} />
+          )}
+          {isGeneratingPick && (
+            <PickDisplay pick={{} as any} isLoading />
           )}
         </div>
 

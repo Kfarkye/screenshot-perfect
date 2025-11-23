@@ -34,6 +34,16 @@ export interface MarketData {
   underOdds: string;
 }
 
+export type MarketType = 'moneyline' | 'puckline' | 'total' | 'prop';
+
+export interface PickData {
+  pick_side: string;
+  confidence_score: number;
+  reasoning_text: string;
+  created_at: string;
+  odds_at_generation: number;
+}
+
 export interface GameData {
   id: string;
   league: League;
@@ -48,6 +58,9 @@ export interface GameData {
   homeScore?: string;
   // Map of bookmaker key (e.g., 'draftkings') to their specific odds
   odds: Record<string, MarketData>;
+  // AI-generated pick data
+  pick?: PickData;
+  isLoadingPick?: boolean;
 }
 
 export type AppTheme = 'light' | 'dark';
