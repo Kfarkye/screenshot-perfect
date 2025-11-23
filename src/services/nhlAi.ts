@@ -385,7 +385,59 @@ export const initializeChat = (league: League): Chat => {
   return chatInstance;
 };
 
+// Edge function router integration (optional - can be toggled)
+const USE_ROUTER = false; // Set to true to use the edge function router
+
+const sendViaRouter = async (userMessage: string, league: League): Promise<string> => {
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      'https://luohiaujigqcjpzicxiz.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA'
+    );
+
+    const contextInjection = rawScheduleContext 
+      ? `Context: Current ${league} odds and games:\n${rawScheduleContext}\n\nQuestion: ${userMessage}`
+      : userMessage;
+
+    const { data, error } = await supabase.functions.invoke('test-chat', {
+      body: {
+        messages: [
+          { role: 'system', content: getSystemInstruction(league) },
+          { role: 'user', content: contextInjection }
+        ],
+        preferredProvider: 'gemini'
+      }
+    });
+
+    if (error) {
+      console.error('[Router] Error:', error);
+      throw new Error(`Router error: ${error.message}`);
+    }
+
+    if (data && typeof data === 'object' && 'response' in data) {
+      return data.response;
+    }
+
+    throw new Error('Invalid response format from router');
+  } catch (error) {
+    console.error('[Router] Failed:', error);
+    // Fall back to direct Gemini if router fails
+    throw error;
+  }
+};
+
 export const sendMessageToAI = async (userMessage: string, league: League = 'NHL'): Promise<string> => {
+  if (USE_ROUTER) {
+    try {
+      return await sendViaRouter(userMessage, league);
+    } catch (routerError) {
+      console.warn('[Router] Falling back to direct Gemini:', routerError);
+      // Fall through to direct implementation
+    }
+  }
+
+  // Original direct Gemini implementation
   try {
     const chat = initializeChat(league);
     const contextInjection = rawScheduleContext 
