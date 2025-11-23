@@ -3,6 +3,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import type { GameData, MarketData } from '../types';
 import { Clock, TrendingUp, Activity, Lock, ArrowUp, ArrowDown, AlertTriangle, Sparkles } from 'lucide-react';
 import { PickDisplay } from './PickDisplay';
+import { PickDetailModal } from './PickDetailModal';
 import { generatePick } from '../services/pickGenerator';
 import { useToast } from '../hooks/use-toast';
 
@@ -201,6 +202,7 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
   const { id, status, awayTeam, homeTeam, awayRecord, homeRecord, time, odds: allOdds, league } = game;
   const [pickData, setPickData] = useState(game.pick);
   const [isGeneratingPick, setIsGeneratingPick] = useState(false);
+  const [showPickModal, setShowPickModal] = useState(false);
   const { toast } = useToast();
   const awayTeamName = awayTeam; 
   const homeTeamName = homeTeam;
@@ -376,9 +378,23 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
             {isGeneratingPick ? (
               <PickDisplay pick={{} as any} isLoading />
             ) : pickData ? (
-              <PickDisplay pick={pickData} />
+              <PickDisplay pick={pickData} onClick={() => setShowPickModal(true)} />
             ) : null}
           </div>
+        )}
+
+        {/* Pick Detail Modal */}
+        {pickData && (
+          <PickDetailModal
+            pick={pickData}
+            isOpen={showPickModal}
+            onClose={() => setShowPickModal(false)}
+            gameInfo={{
+              awayTeam: game.awayTeam,
+              homeTeam: game.homeTeam,
+              time: game.time
+            }}
+          />
         )}
 
         <div className="relative bg-surfaceHighlight/30 dark:bg-surfaceHighlight/20 backdrop-blur-md p-5 md:w-[380px] flex flex-col justify-center border-t md:border-t-0 md:border-l border-border/20">
