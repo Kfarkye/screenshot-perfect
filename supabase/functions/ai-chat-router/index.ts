@@ -295,6 +295,12 @@ async function callGemini(messages: ChatMessage[], ctx: RequestContext): Promise
   const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
 
   try {
+    log('DEBUG', '[GEMINI] Sending request', {
+      requestId: ctx.requestId,
+      model: 'gemini-3-pro-preview',
+      messageCount: geminiMessages.length
+    });
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${apiKey}`,
       {
@@ -312,8 +318,19 @@ async function callGemini(messages: ChatMessage[], ctx: RequestContext): Promise
       }
     );
 
+    log('DEBUG', '[GEMINI] Response received', {
+      requestId: ctx.requestId,
+      status: response.status,
+      ok: response.ok
+    });
+
     if (!response.ok) {
       const error = await response.text();
+      log('ERROR', '[GEMINI] API error details', {
+        requestId: ctx.requestId,
+        status: response.status,
+        error: error.substring(0, 500)
+      });
       throw new Error(`Gemini API error (${response.status}): ${error}`);
     }
 
