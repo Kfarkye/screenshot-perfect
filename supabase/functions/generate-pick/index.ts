@@ -13,7 +13,7 @@ const ODDS_DRIFT_THRESHOLD = 20;
 
 // 2. Environment Validation (Fail Fast)
 const EnvSchema = z.object({
-  OPENAI_API_KEY: z.string().min(1),
+  GOOGLE_API_KEY: z.string().min(1),
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
 });
@@ -28,8 +28,8 @@ const env = envParse.data;
 // 3. Initialize Supabase Client
 const supabase: SupabaseClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-const LLM_MODEL = "gpt-4o";
-const EMBEDDING_MODEL = "text-embedding-3-small";
+const LLM_MODEL = "gemini-3-pro-preview";
+const EMBEDDING_MODEL = "text-embedding-004";
 // The columns used to uniquely identify a record for UPSERT (must match the DB unique constraint)
 const UNIQUE_CONSTRAINT = 'game_id, market_type';
 
@@ -183,44 +183,45 @@ const generateAnalysis = async (input: RequestInput): Promise<{ analysis: LLMOut
     Response MUST be a JSON object: { "pick_side": string, "confidence": number (1-100), "reasoning": string }
   `;
 
-  // 2a. Generate Analysis using direct fetch
+  // 2a. Generate Analysis using Google Gemini API
   try {
-    console.log('[Calling OpenAI Chat API]', { model: LLM_MODEL, game_id: input.game_id });
+    console.log('[Calling Gemini API]', { model: LLM_MODEL, game_id: input.game_id });
     
-    const chatResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    const chatResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL}:generateContent?key=${env.GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: LLM_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Analyze: ${JSON.stringify(game_context)}` },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.3,
+        contents: [{
+          parts: [{
+            text: `${systemPrompt}\n\nAnalyze: ${JSON.stringify(game_context)}`
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.3,
+          responseMimeType: "application/json",
+        }
       }),
     });
 
     if (!chatResponse.ok) {
       const errorText = await chatResponse.text();
-      console.error('[OpenAI Chat Error]', chatResponse.status, errorText);
+      console.error('[Gemini Chat Error]', chatResponse.status, errorText);
       throw new HttpError(502, "Upstream analysis service unavailable", { status: chatResponse.status, error: errorText });
     }
 
     const chatData = await chatResponse.json();
-    console.log('[OpenAI Chat Response]', JSON.stringify(chatData).substring(0, 200));
-    const rawResult = chatData.choices[0]?.message?.content;
+    console.log('[Gemini Chat Response]', JSON.stringify(chatData).substring(0, 200));
+    const rawResult = chatData.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!rawResult) {
-      console.error('[OpenAI returned empty content]', chatData);
-      throw new HttpError(502, "OpenAI returned empty response");
+      console.error('[Gemini returned empty content]', chatData);
+      throw new HttpError(502, "Gemini returned empty response");
     }
 
     // 2b. Validate LLM Output
-    console.log('[Parsing OpenAI response]', rawResult.substring(0, 100));
+    console.log('[Parsing Gemini response]', rawResult.substring(0, 100));
     const parsedJson = JSON.parse(rawResult || "{}");
     const validation = LLMOutputSchema.safeParse(parsedJson);
     if (!validation.success) {
@@ -230,29 +231,31 @@ const generateAnalysis = async (input: RequestInput): Promise<{ analysis: LLMOut
     const analysis = validation.data;
     console.log('[Analysis validated]', { pick_side: analysis.pick_side, confidence: analysis.confidence });
 
-    // 2c. Generate Embedding using direct fetch
-    console.log('[Calling OpenAI Embeddings API]');
-    const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+    // 2c. Generate Embedding using Google Gemini API
+    console.log('[Calling Gemini Embeddings API]');
+    const embeddingResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${env.GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: EMBEDDING_MODEL,
-        input: analysis.reasoning,
+        content: {
+          parts: [{
+            text: analysis.reasoning
+          }]
+        }
       }),
     });
 
     if (!embeddingResponse.ok) {
       const errorText = await embeddingResponse.text();
-      console.error('[OpenAI Embedding Error]', embeddingResponse.status, errorText);
+      console.error('[Gemini Embedding Error]', embeddingResponse.status, errorText);
       throw new HttpError(502, "Upstream embedding service unavailable", { status: embeddingResponse.status, error: errorText });
     }
 
     const embeddingData = await embeddingResponse.json();
-    console.log('[Embedding response]', { hasData: !!embeddingData.data, dataLength: embeddingData.data?.length });
-    const embedding = embeddingData.data[0]?.embedding;
+    console.log('[Embedding response]', { hasEmbedding: !!embeddingData.embedding });
+    const embedding = embeddingData.embedding?.values;
 
     if (!embedding) {
       console.error('[Embedding missing in response]', embeddingData);
