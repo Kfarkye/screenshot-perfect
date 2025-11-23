@@ -16,11 +16,11 @@ const cn = (...classes: (string | boolean | undefined | null)[]): string => {
 
 const LOGO_SIZE = 40;
 
-const getEspnLogoUrl = (abbr: string, league: 'NHL' | 'NFL' = 'NHL'): string => {
+const getEspnLogoUrl = (abbr: string, league: 'NHL' | 'NFL' | 'NBA' = 'NHL'): string => {
     // Basic mapping check - NFL generally uses simple codes, NHL has quirks
     // We lowercase abbr for ESPN CDN pattern
     const code = abbr.toLowerCase();
-    const sportPath = league === 'NHL' ? 'nhl' : 'nfl';
+    const sportPath = league === 'NHL' ? 'nhl' : league === 'NFL' ? 'nfl' : 'nba';
     // NFL uses same CDN structure
     const size = LOGO_SIZE * 2;
     return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/${sportPath}/500/${code}.png&h=${size}&w=${size}&lossy=1`;
@@ -40,7 +40,7 @@ const parseLine = (plString: string | undefined): { line: string, juice: string 
 interface TeamLogoProps {
     teamAbbr: string;
     teamName: string;
-    league: 'NHL' | 'NFL';
+    league: 'NHL' | 'NFL' | 'NBA';
 }
 
 const TeamLogo = React.memo(({ teamAbbr, teamName, league }: TeamLogoProps) => {
