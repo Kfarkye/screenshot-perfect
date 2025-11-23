@@ -1190,37 +1190,8 @@ function sendDebugEvent(
 }
 
 async function getDomainContext(userId: string, ctx: RequestContext): Promise<string | null> {
-  try {
-    log("DEBUG", "[CONTEXT] Fetching domain context", { ctx });
-    return await retryOperation(
-      async () => {
-        const { data, error } = await supabaseAdmin
-          .from("clinician_profiles")
-          .select("full_name, specialty")
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        if (error) throw error;
-        if (!data) {
-          log("DEBUG", "[CONTEXT] No domain context found for user.", { ctx });
-          return null;
-        }
-
-        log("DEBUG", "[CONTEXT] Domain context fetched successfully.", { ctx });
-        return `User Context: Healthcare recruiter managing clinician ${data.full_name}. Specialty: ${data.specialty || "N/A"}.`;
-      },
-      (error) => {
-        const isPostgrestError =
-          error instanceof Error && "code" in error && typeof error.code === "string" && error.code.startsWith("PGRST");
-        return !isPostgrestError;
-      },
-      2,
-      ctx,
-    );
-  } catch (error) {
-    log("ERROR", "[CONTEXT] Error fetching domain context, proceeding without it.", { error, ctx });
-    return null;
-  }
+  // Domain context disabled - not needed for this app
+  return null;
 }
 
 const VALID_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
