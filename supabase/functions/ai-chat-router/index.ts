@@ -1,5 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { encodeBase64 } from "https://deno.land/std@0.208.0/encoding/base64.ts";
 
@@ -1373,9 +1372,6 @@ function persistMessage(requestId: string, messageData: Record<string, unknown>,
       } else {
         log("DEBUG", "[DB-ASYNC] Message persistence successful", { ctx, requestId });
       }
-    })
-    .catch((err) => {
-      log("ERROR", "[DB-ASYNC] Unexpected error during persistence", { requestId, error: err, ctx });
     });
 }
 
