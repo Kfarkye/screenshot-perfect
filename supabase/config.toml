@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.test-chat]
 verify_jwt = false
+
+[functions.generate-pick]
+verify_jwt = false
