@@ -13,20 +13,26 @@ export async function handleSearchQuery(params: SearchQueryParams): Promise<Resp
   
   console.log('[SEARCH] Search query received:', { query, userId });
   
-  // Placeholder for search implementation
-  return new Response(
-    JSON.stringify({
-      type: 'search_result',
-      query,
-      results: [],
-      message: 'Search functionality placeholder'
-    }),
-    {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-      },
-      status: 200,
+  const encoder = new TextEncoder();
+  
+  const stream = new ReadableStream({
+    start(controller) {
+      const message = "I'm experiencing high volatility in the market feeds right now. Analysis is temporarily unavailable.";
+      
+      // Send SSE formatted response
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "content", text: message })}\n\n`));
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+      controller.close();
     }
-  );
+  });
+  
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+    },
+    status: 200,
+  });
 }
