@@ -185,6 +185,8 @@ const generateAnalysis = async (input: RequestInput): Promise<{ analysis: LLMOut
 
   // 2a. Generate Analysis using direct fetch
   try {
+    console.log('[Calling OpenAI Chat API]', { model: LLM_MODEL, game_id: input.game_id });
+    
     const chatResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -209,17 +211,27 @@ const generateAnalysis = async (input: RequestInput): Promise<{ analysis: LLMOut
     }
 
     const chatData = await chatResponse.json();
+    console.log('[OpenAI Chat Response]', JSON.stringify(chatData).substring(0, 200));
     const rawResult = chatData.choices[0]?.message?.content;
+    
+    if (!rawResult) {
+      console.error('[OpenAI returned empty content]', chatData);
+      throw new HttpError(502, "OpenAI returned empty response");
+    }
 
     // 2b. Validate LLM Output
+    console.log('[Parsing OpenAI response]', rawResult.substring(0, 100));
     const parsedJson = JSON.parse(rawResult || "{}");
     const validation = LLMOutputSchema.safeParse(parsedJson);
     if (!validation.success) {
+        console.error('[Schema validation failed]', validation.error.format());
         throw new HttpError(502, "LLM returned invalid schema", validation.error.format());
     }
     const analysis = validation.data;
+    console.log('[Analysis validated]', { pick_side: analysis.pick_side, confidence: analysis.confidence });
 
     // 2c. Generate Embedding using direct fetch
+    console.log('[Calling OpenAI Embeddings API]');
     const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
       headers: {
@@ -239,16 +251,26 @@ const generateAnalysis = async (input: RequestInput): Promise<{ analysis: LLMOut
     }
 
     const embeddingData = await embeddingResponse.json();
+    console.log('[Embedding response]', { hasData: !!embeddingData.data, dataLength: embeddingData.data?.length });
     const embedding = embeddingData.data[0]?.embedding;
 
-    if (!embedding) throw new HttpError(502, "Embedding generation failed.");
-
+    if (!embedding) {
+      console.error('[Embedding missing in response]', embeddingData);
+      throw new HttpError(502, "Embedding generation failed.");
+    }
+    
+    console.log('[Successfully generated analysis and embedding]');
     return { analysis, embedding };
 
   } catch (e) {
       if (e instanceof HttpError) throw e;
-      console.error("[LLM PROCESSING ERROR]", e);
-      throw new HttpError(502, "Failed to process analysis results", e);
+      console.error("[LLM PROCESSING ERROR - Full details]", e);
+      console.error("[Error stack]", e instanceof Error ? e.stack : 'No stack');
+      console.error("[Error message]", e instanceof Error ? e.message : String(e));
+      throw new HttpError(502, "Failed to process analysis results", { 
+        error: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined 
+      });
   }
 };
 
