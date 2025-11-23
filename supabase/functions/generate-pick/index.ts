@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { OpenAI } from "https://esm.sh/openai@4";
-import { z } from "https://deno.land/x/zod@v3.21.4/mod.ts";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
 
 // ---------------------------------------------------------
 // CONFIGURATION & CONSTANTS
@@ -26,8 +25,7 @@ if (!envParse.success) {
 }
 const env = envParse.data;
 
-// 3. Initialize Clients
-const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+// 3. Initialize Supabase Client
 const supabase: SupabaseClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
 const LLM_MODEL = "gpt-4o";
@@ -173,7 +171,7 @@ const checkCacheAndValidate = async (input: RequestInput) => {
 
 /**
  * 2. THE GENERATION (Slow Path)
- * Calls the LLM, validates the output structure, and generates embeddings.
+ * Calls the LLM via direct fetch, validates the output structure, and generates embeddings.
  */
 const generateAnalysis = async (input: RequestInput): Promise<{ analysis: LLMOutput, embedding: number[] }> => {
   const { game_context, market_type, current_odds } = input;
@@ -185,49 +183,72 @@ const generateAnalysis = async (input: RequestInput): Promise<{ analysis: LLMOut
     Response MUST be a JSON object: { "pick_side": string, "confidence": number (1-100), "reasoning": string }
   `;
 
-  // 2a. Generate Analysis
-  const completion = await openai.chat.completions.create({
-    model: LLM_MODEL,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: `Analyze: ${JSON.stringify(game_context)}` },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.3, // Low temperature for high consistency
-  }).catch(err => {
-    // 502 Bad Gateway indicates an issue with the upstream service (OpenAI)
-    throw new HttpError(502, "Upstream analysis service unavailable", err);
-  });
-
-  const rawResult = completion.choices[0]?.message?.content;
-
-  // 2b. Validate LLM Output
+  // 2a. Generate Analysis using direct fetch
   try {
-      const parsedJson = JSON.parse(rawResult || "{}");
-      const validation = LLMOutputSchema.safeParse(parsedJson);
-      if (!validation.success) {
-          throw new HttpError(502, "LLM returned invalid schema", validation.error.format());
-      }
-      const analysis = validation.data;
+    const chatResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Analyze: ${JSON.stringify(game_context)}` },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+      }),
+    });
 
-      // 2c. Generate Embedding
-      const embeddingResponse = await openai.embeddings.create({
+    if (!chatResponse.ok) {
+      const errorText = await chatResponse.text();
+      console.error('[OpenAI Chat Error]', chatResponse.status, errorText);
+      throw new HttpError(502, "Upstream analysis service unavailable", { status: chatResponse.status, error: errorText });
+    }
+
+    const chatData = await chatResponse.json();
+    const rawResult = chatData.choices[0]?.message?.content;
+
+    // 2b. Validate LLM Output
+    const parsedJson = JSON.parse(rawResult || "{}");
+    const validation = LLMOutputSchema.safeParse(parsedJson);
+    if (!validation.success) {
+        throw new HttpError(502, "LLM returned invalid schema", validation.error.format());
+    }
+    const analysis = validation.data;
+
+    // 2c. Generate Embedding using direct fetch
+    const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         model: EMBEDDING_MODEL,
         input: analysis.reasoning,
-      }).catch(err => {
-        throw new HttpError(502, "Upstream embedding service unavailable", err);
-      });
+      }),
+    });
 
-      const embedding = embeddingResponse.data[0]?.embedding;
+    if (!embeddingResponse.ok) {
+      const errorText = await embeddingResponse.text();
+      console.error('[OpenAI Embedding Error]', embeddingResponse.status, errorText);
+      throw new HttpError(502, "Upstream embedding service unavailable", { status: embeddingResponse.status, error: errorText });
+    }
 
-      if (!embedding) throw new HttpError(502, "Embedding generation failed.");
+    const embeddingData = await embeddingResponse.json();
+    const embedding = embeddingData.data[0]?.embedding;
 
-      return { analysis, embedding };
+    if (!embedding) throw new HttpError(502, "Embedding generation failed.");
+
+    return { analysis, embedding };
 
   } catch (e) {
       if (e instanceof HttpError) throw e;
-      console.error("[LLM PROCESSING ERROR]", e, rawResult);
-      throw new HttpError(502, "Failed to process analysis results");
+      console.error("[LLM PROCESSING ERROR]", e);
+      throw new HttpError(502, "Failed to process analysis results", e);
   }
 };
 
