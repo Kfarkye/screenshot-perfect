@@ -368,14 +368,18 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
               )}
             </button>
           </div>
-          
-          {pickData && !isGeneratingPick && (
-            <PickDisplay pick={pickData} />
-          )}
-          {isGeneratingPick && (
-            <PickDisplay pick={{} as any} isLoading />
-          )}
         </div>
+
+        {/* Pick Display Section */}
+        {(pickData || isGeneratingPick) && (
+          <div className="px-5 md:px-6 pb-5 relative z-10">
+            {isGeneratingPick ? (
+              <PickDisplay pick={{} as any} isLoading />
+            ) : pickData ? (
+              <PickDisplay pick={pickData} />
+            ) : null}
+          </div>
+        )}
 
         <div className="relative bg-surfaceHighlight/30 dark:bg-surfaceHighlight/20 backdrop-blur-md p-5 md:w-[380px] flex flex-col justify-center border-t md:border-t-0 md:border-l border-border/20">
           {boardLocked && (
