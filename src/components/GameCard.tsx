@@ -4,7 +4,7 @@ import type { GameData, MarketData } from '../types';
 import { Clock, TrendingUp, Activity, Lock, ArrowUp, ArrowDown, AlertTriangle, Sparkles } from 'lucide-react';
 import { PickDisplay } from './PickDisplay';
 import { generatePick } from '../services/pickGenerator';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '../hooks/use-toast';
 
 const observability = {
   trackEvent: (event: string, properties: Record<string, unknown> = {}) => {},
