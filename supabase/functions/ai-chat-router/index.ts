@@ -270,7 +270,7 @@ async function withRetry<T>(
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function callGemini(messages: ChatMessage[], ctx: RequestContext): Promise<ProviderResponse> {
-  const apiKey = Deno.env.get('GEMINI_API_KEY');
+  const apiKey = Deno.env.get('GEMINI_API_KEY')?.trim();
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
 
   // Format messages - inject system message as first user message for better context
@@ -336,7 +336,7 @@ async function callGemini(messages: ChatMessage[], ctx: RequestContext): Promise
 }
 
 async function callOpenAI(messages: ChatMessage[], ctx: RequestContext): Promise<ProviderResponse> {
-  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  const apiKey = Deno.env.get('OPENAI_API_KEY')?.trim();
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
 
   const controller = new AbortController();
@@ -381,7 +381,7 @@ async function callOpenAI(messages: ChatMessage[], ctx: RequestContext): Promise
 }
 
 async function callAnthropic(messages: ChatMessage[], ctx: RequestContext): Promise<ProviderResponse> {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  const apiKey = Deno.env.get('ANTHROPIC_API_KEY')?.trim();
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
 
   // Separate system message from conversation
