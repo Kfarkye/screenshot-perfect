@@ -6,8 +6,6 @@ import { Header } from './components/Header';
 import { ChatMessage } from './components/ChatMessage';
 import { InputArea, InputAreaHandle } from './components/InputArea';
 import { useAuth } from './hooks/useAuth';
-import { Button } from './components/ui/button';
-import { LogOut } from 'lucide-react';
 
 // Types (Using 'import type' ensures types are erased at compile time for optimal builds)
 import type { Message, SuggestionType, GameData, AppTheme, League } from './types';
@@ -464,23 +462,13 @@ const App: React.FC = () => {
             </div>
         )}
 
-        <div className="flex items-center justify-between border-b border-border/20 bg-surface/30">
-          <Header 
-            theme={theme} 
-            toggleTheme={toggleTheme} 
-            activeLeague={activeLeague} 
-            onLeagueChange={handleLeagueChange} 
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={signOut}
-            className="mr-4 text-textSecondary hover:text-textPrimary"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </Button>
-        </div>
+        <Header 
+          theme={theme} 
+          toggleTheme={toggleTheme} 
+          activeLeague={activeLeague} 
+          onLeagueChange={handleLeagueChange} 
+          onSignOut={signOut}
+        />
 
         <nav className="flex-shrink-0 px-4 pt-6 pb-2 z-40 sm:px-6" aria-label="Main Navigation">
             <div 

@@ -102,9 +102,10 @@ interface HeaderProps {
   onLeagueChange: (league: League) => void;
   marketStatus?: MarketStatus;
   isOnline?: boolean;
+  onSignOut?: () => void;
 }
 
-export const Header = React.memo(({ theme, toggleTheme, activeLeague, onLeagueChange, marketStatus = 'Connecting', isOnline = true }: HeaderProps) => {
+export const Header = React.memo(({ theme, toggleTheme, activeLeague, onLeagueChange, marketStatus = 'Connecting', isOnline = true, onSignOut }: HeaderProps) => {
   const isScrolled = useScrollPosition(10);
 
   // Calculate slider position based on active league
@@ -171,6 +172,17 @@ export const Header = React.memo(({ theme, toggleTheme, activeLeague, onLeagueCh
 
         <nav className="flex items-center gap-3 sm:gap-6">
            <StatusIndicator status={marketStatus} isOnline={isOnline} />
+           {onSignOut && (
+             <>
+               <div className="w-px h-6 bg-border/20" aria-hidden="true"></div>
+               <button
+                 onClick={onSignOut}
+                 className="text-xs font-medium text-textSecondary hover:text-textPrimary transition-colors px-3 py-1.5 rounded-lg hover:bg-surfaceHighlight/50"
+               >
+                 Sign Out
+               </button>
+             </>
+           )}
            <div className="w-px h-6 bg-border/20 hidden sm:block" aria-hidden="true"></div>
            <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} />
         </nav>
