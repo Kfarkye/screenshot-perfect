@@ -57,9 +57,11 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        // Sports Betting Theme Extensions
+        // Custom Theme Extensions
         surfaceHighlight: "hsl(var(--surface-highlight))",
+        textPrimary: "hsl(var(--text-primary))",
         textSecondary: "hsl(var(--text-secondary))",
+        textTertiary: "hsl(var(--text-tertiary))",
         success: "hsl(var(--success))",
         warning: "hsl(var(--warning))",
         danger: "hsl(var(--danger))",
