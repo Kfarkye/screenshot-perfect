@@ -418,6 +418,27 @@ const sendViaRouter = async (userMessage: string, league: League): Promise<strin
     throw new Error('No data returned from edge function');
   }
 
+  // Handle streaming SSE response
+  if (typeof data === 'string') {
+    // Parse SSE format to extract text content
+    const lines = data.split('\n');
+    let fullText = '';
+    
+    for (const line of lines) {
+      if (line.startsWith('event: text')) {
+        continue;
+      }
+      if (line.startsWith('data: ')) {
+        const content = line.slice(6).trim();
+        if (content && content !== '[DONE]') {
+          fullText += content;
+        }
+      }
+    }
+    
+    return fullText || 'No response received';
+  }
+
   if (typeof data === 'object' && 'error' in data) {
     throw new Error(`Edge function returned error: ${data.error}`);
   }
