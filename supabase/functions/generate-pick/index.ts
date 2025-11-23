@@ -243,8 +243,7 @@ const generateAnalysis = async (input: RequestInput): Promise<{ analysis: LLMOut
           parts: [{
             text: analysis.reasoning
           }]
-        },
-        outputDimensionality: 1536  // Match database vector dimensions
+        }
       }),
     });
 
