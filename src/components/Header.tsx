@@ -32,13 +32,13 @@ const StatusIndicator = React.memo(({ status, isOnline }: StatusIndicatorProps) 
     if (!isOnline) {
         return (
             <div className="flex items-center gap-3" role="status" aria-label="Network Status: Offline" aria-live="assertive">
-                <WifiOff size={16} className="text-yellow-500" />
-                <span className="text-xs font-semibold text-yellow-500 tracking-wider uppercase hidden md:inline">Offline</span>
+                <WifiOff size={16} className="text-warning" />
+                <span className="text-xs font-semibold text-warning tracking-wider uppercase hidden md:inline">Offline</span>
             </div>
         );
     }
     const config = useMemo(() => {
-        let indicatorColor = 'bg-gray-500';
+        let indicatorColor = 'bg-textTertiary';
         let textColor = 'text-textSecondary';
         let label = 'Market Closed';
         let Icon: React.ElementType | null = null;
@@ -47,7 +47,7 @@ const StatusIndicator = React.memo(({ status, isOnline }: StatusIndicatorProps) 
             case 'Live': indicatorColor = 'bg-success'; textColor = 'text-success'; label = 'Market Live'; animate = true; break;
             case 'Error': indicatorColor = 'bg-danger'; textColor = 'text-danger'; label = 'Feed Error'; Icon = AlertTriangle; break;
             case 'Delayed': indicatorColor = 'bg-warning'; textColor = 'text-warning'; label = 'Data Delayed'; Icon = Clock; break;
-            case 'Connecting': indicatorColor = 'bg-blue-500'; textColor = 'text-blue-500'; label = 'Connecting'; animate = true; break;
+            case 'Connecting': indicatorColor = 'bg-accent'; textColor = 'text-accent'; label = 'Connecting'; animate = true; break;
         }
         return { indicatorColor, textColor, label, Icon, animate };
     }, [status]);
