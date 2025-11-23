@@ -400,8 +400,8 @@ const sendViaRouter = async (userMessage: string, league: League): Promise<strin
     ? `Context: Current ${league} odds and games:\n${rawScheduleContext}\n\nQuestion: ${userMessage}`
     : userMessage;
 
-  console.log('[Router] Calling test-chat function...');
-  const { data, error } = await supabase.functions.invoke('test-chat', {
+  console.log('[Router] Calling ai-chat-router function...');
+  const { data, error } = await supabase.functions.invoke('ai-chat-router', {
     body: {
       messages: [
         { role: 'system', content: getSystemInstruction(league) },
