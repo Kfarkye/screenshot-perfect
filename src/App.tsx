@@ -5,6 +5,9 @@ import React, { useState, useRef, useEffect, useCallback, lazy, Suspense, useMem
 import { Header } from './components/Header';
 import { ChatMessage } from './components/ChatMessage';
 import { InputArea, InputAreaHandle } from './components/InputArea';
+import { useAuth } from './hooks/useAuth';
+import { Button } from './components/ui/button';
+import { LogOut } from 'lucide-react';
 
 // Types (Using 'import type' ensures types are erased at compile time for optimal builds)
 import type { Message, SuggestionType, GameData, AppTheme, League } from './types';
@@ -252,6 +255,9 @@ OnboardingView.displayName = 'OnboardingView';
 // --- Main Application Component ---
 
 const App: React.FC = () => {
+  // Auth
+  const { user, signOut } = useAuth();
+  
   // State Management
   const { theme, toggleTheme } = useTheme('dark');
   const [activeTab, setActiveTab] = useState<TabId>('chat');
@@ -351,22 +357,18 @@ const App: React.FC = () => {
     const startTime = performance.now();
 
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        'https://luohiaujigqcjpzicxiz.supabase.co',
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA'
-      );
+      const { supabase } = await import('@/integrations/supabase/client');
 
       // Get or create conversation
       const sessionId = `session_${Date.now()}`;
       let conversationId = localStorage.getItem('conversationId');
       
-      if (!conversationId) {
+      if (!conversationId && user) {
         const { data: convData, error: convError } = await supabase
           .from('ai_conversations')
           .insert({
             session_id: sessionId,
-            user_id: crypto.randomUUID(), // Anonymous user for now
+            user_id: user.id,
             title: `${activeLeague} Analysis`
           })
           .select('id')
@@ -462,12 +464,23 @@ const App: React.FC = () => {
             </div>
         )}
 
-        <Header 
-          theme={theme} 
-          toggleTheme={toggleTheme} 
-          activeLeague={activeLeague} 
-          onLeagueChange={handleLeagueChange} 
-        />
+        <div className="flex items-center justify-between border-b border-border/20 bg-surface/30">
+          <Header 
+            theme={theme} 
+            toggleTheme={toggleTheme} 
+            activeLeague={activeLeague} 
+            onLeagueChange={handleLeagueChange} 
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={signOut}
+            className="mr-4 text-textSecondary hover:text-textPrimary"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Sign Out
+          </Button>
+        </div>
 
         <nav className="flex-shrink-0 px-4 pt-6 pb-2 z-40 sm:px-6" aria-label="Main Navigation">
             <div 
