@@ -389,12 +389,8 @@ export const initializeChat = (league: League): Chat => {
 const USE_ROUTER = true; // Set to true to use the edge function router
 
 const sendViaRouter = async (userMessage: string, league: League): Promise<string> => {
-  console.log('[Router] Initializing Supabase client...');
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabase = createClient(
-    'https://luohiaujigqcjpzicxiz.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA'
-  );
+  console.log('[Router] Using authenticated Supabase client...');
+  const { supabase } = await import('@/integrations/supabase/client');
 
   const contextInjection = rawScheduleContext 
     ? `[SYSTEM INJECTION - CURRENT ${league} ODDS (Source: The Odds API)]:\n${rawScheduleContext}\n\n[USER]:\n${userMessage}`
