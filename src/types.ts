@@ -1,33 +1,52 @@
-export type League = 'NHL' | 'NFL';
-export type AppTheme = 'light' | 'dark';
-
-export interface MarketData {
-  spread?: string;
-  moneyline?: string;
-  total?: string;
-  [key: string]: string | undefined;
-}
-
-export interface GameData {
-  id: string;
-  league: League;
-  homeTeam: string;
-  awayTeam: string;
-  homeAbbr: string;
-  awayAbbr: string;
-  startTime: string;
-  status: 'scheduled' | 'live' | 'final';
-  markets: {
-    [bookmaker: string]: {
-      home: MarketData;
-      away: MarketData;
-    };
-  };
-}
+export type League = 'NHL' | 'NFL' | 'NBA';
 
 export interface Message {
   id: string;
   role: 'user' | 'model';
   content: string;
   timestamp: number;
+  isError?: boolean;
+  metadata?: Record<string, any>;
 }
+
+export interface ChatState {
+  messages: Message[];
+  isLoading: boolean;
+  error: string | null;
+}
+
+export enum SuggestionType {
+  SLATE = "Today's Slate",
+  TRENDS = "Recent Trends",
+  INJURIES = "Key Injuries",
+  GAME_EXAMPLE = "Rangers vs Devils",
+  PROMO_STRATEGY = "Optimize a No-Loss Bet"
+}
+
+export interface MarketData {
+  awayML: string;
+  homeML: string;
+  awayPL: string; // Puck Line, Spread, or Run Line
+  homePL: string;
+  total: string;
+  overOdds: string;
+  underOdds: string;
+}
+
+export interface GameData {
+  id: string;
+  league: League;
+  awayTeam: string;
+  homeTeam: string;
+  awayRecord?: string;
+  homeRecord?: string;
+  time: string;
+  timestamp: number; // Unix timestamp for accurate sorting
+  status: 'Scheduled' | 'Live' | 'Final' | 'Postponed' | 'Canceled';
+  awayScore?: string;
+  homeScore?: string;
+  // Map of bookmaker key (e.g., 'draftkings') to their specific odds
+  odds: Record<string, MarketData>;
+}
+
+export type AppTheme = 'light' | 'dark';
