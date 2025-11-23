@@ -113,8 +113,8 @@ const OddsCell = React.memo(({ label, main, sub, isFavorite = false, isDisabled 
 
     const mainColor = useMemo(() => {
         if (isDisabled) return 'text-textTertiary/70';
-        if (movement === 'up') return 'text-green-500';
-        if (movement === 'down') return 'text-red-500';
+        if (movement === 'up') return 'text-success';
+        if (movement === 'down') return 'text-danger';
         return isFavorite ? 'text-accent' : 'text-textPrimary';
     }, [isFavorite, isDisabled, movement]);
 
@@ -166,18 +166,18 @@ const StatusBadge = React.memo(({ status, time }: StatusBadgeProps) => {
     switch (status) {
         case 'Live':
             return (
-                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-600/15 border border-red-600/30 shadow-md" role="status" aria-label="Game is live">
-                    <Activity size={12} className="text-red-500 motion-safe:animate-pulse" strokeWidth={3} />
-                    <span className="text-xs font-bold text-red-500 tracking-wider uppercase">Live</span>
+                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-danger/15 border border-danger/30 shadow-md" role="status" aria-label="Game is live">
+                    <Activity size={12} className="text-danger motion-safe:animate-pulse" strokeWidth={3} />
+                    <span className="text-xs font-bold text-danger tracking-wider uppercase">Live</span>
                 </div>
             );
         case 'Final': return <span className="text-xs font-semibold text-textTertiary uppercase tracking-widest">Final</span>;
         case 'Postponed':
         case 'Canceled':
             return (
-                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-600/20 border border-yellow-600/40">
-                    <AlertTriangle size={12} className="text-yellow-500" />
-                    <span className="text-[11px] font-bold text-yellow-500 tracking-wider uppercase">{status === 'Postponed' ? 'PPD' : status}</span>
+                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-warning/20 border border-warning/40">
+                    <AlertTriangle size={12} className="text-warning" />
+                    <span className="text-[11px] font-bold text-warning tracking-wider uppercase">{status === 'Postponed' ? 'PPD' : status}</span>
                 </div>
             );
         default:
@@ -354,17 +354,17 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
             <button
               onClick={handleGeneratePick}
               disabled={isGeneratingPick || boardLocked}
-              className="glass-button-vibrant px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 motion-safe:hover:scale-105 active:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="glass-button-vibrant px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ willChange: 'transform, opacity' }}
             >
               {isGeneratingPick ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
                   <span className="text-sm font-bold text-textPrimary">Generating...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles size={16} strokeWidth={2.5} className="text-purple-400" />
+                  <Sparkles size={16} strokeWidth={2.5} className="text-accent" />
                   <span className="text-sm font-bold text-textPrimary">Get Pick</span>
                 </>
               )}
