@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
 import { GameData, MarketType, PickData } from '../types';
 
 export interface GeneratePickParams {
