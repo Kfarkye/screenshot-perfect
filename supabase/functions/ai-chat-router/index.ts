@@ -661,8 +661,8 @@ const ROUTER_CONFIG: Record<string, RouteProfile> = {
   },
 };
 
-const PREFERRED_MODEL_KEY = "anthropic";
-const FALLBACK_MODEL_KEY = "openai";
+const PREFERRED_MODEL_KEY = "gemini";
+const FALLBACK_MODEL_KEY = "anthropic";
 
 const CODE_WORDS = new Set([
   "code",
