@@ -7,6 +7,7 @@ export interface Message {
   timestamp: number;
   isError?: boolean;
   metadata?: Record<string, any>;
+  status: 'pending' | 'processing' | 'complete' | 'error' | 'cancelled';
 }
 
 export interface ChatState {

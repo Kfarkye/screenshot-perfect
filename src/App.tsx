@@ -341,6 +341,7 @@ const App: React.FC = () => {
           role: 'user',
           content: trimmedContent,
           timestamp: Date.now(),
+          status: 'complete',
         };
         setMessages((prev) => [...prev, userMsg]);
         setIsLoading(true);
@@ -360,6 +361,7 @@ const App: React.FC = () => {
         role: 'model',
         content: responseText,
         timestamp: Date.now(),
+        status: 'complete',
         metadata: { latency }
       };
       setMessages((prev) => [...prev, aiMsg]);
@@ -381,6 +383,7 @@ const App: React.FC = () => {
         role: 'model',
         content: "I'm experiencing high volatility in the market feeds right now. Analysis is temporarily unavailable.",
         timestamp: Date.now(),
+        status: 'error',
         isError: true,
       };
       setMessages((prev) => [...prev, errorMsg]);

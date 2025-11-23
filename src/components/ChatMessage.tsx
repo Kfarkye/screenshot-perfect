@@ -387,7 +387,7 @@ const renderInline = (
       case 'metric':
         return (
           <span key={idx} className={style}>
-            <span className="opacity-60">{segment.metadata?.label}:</span>
+            <span className="opacity-60">{segment.metadata?.label as React.ReactNode}:</span>
             <span className="font-numeric">{segment.content}</span>
           </span>
         );
