@@ -389,64 +389,62 @@ export const initializeChat = (league: League): Chat => {
 const USE_ROUTER = true; // Set to true to use the edge function router
 
 const sendViaRouter = async (userMessage: string, league: League): Promise<string> => {
-  try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      'https://luohiaujigqcjpzicxiz.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA'
-    );
+  console.log('[Router] Initializing Supabase client...');
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(
+    'https://luohiaujigqcjpzicxiz.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA'
+  );
 
-    const contextInjection = rawScheduleContext 
-      ? `Context: Current ${league} odds and games:\n${rawScheduleContext}\n\nQuestion: ${userMessage}`
-      : userMessage;
+  const contextInjection = rawScheduleContext 
+    ? `Context: Current ${league} odds and games:\n${rawScheduleContext}\n\nQuestion: ${userMessage}`
+    : userMessage;
 
-    const { data, error } = await supabase.functions.invoke('test-chat', {
-      body: {
-        messages: [
-          { role: 'system', content: getSystemInstruction(league) },
-          { role: 'user', content: contextInjection }
-        ],
-        preferredProvider: 'gemini'
-      }
-    });
-
-    if (error) {
-      console.error('[Router] Error:', error);
-      throw new Error(`Router error: ${error.message}`);
+  console.log('[Router] Calling test-chat function...');
+  const { data, error } = await supabase.functions.invoke('test-chat', {
+    body: {
+      messages: [
+        { role: 'system', content: getSystemInstruction(league) },
+        { role: 'user', content: contextInjection }
+      ],
+      preferredProvider: 'gemini'
     }
+  });
 
-    if (data && typeof data === 'object' && 'response' in data) {
-      return data.response;
-    }
-
-    throw new Error('Invalid response format from router');
-  } catch (error) {
-    console.error('[Router] Failed:', error);
-    // Fall back to direct Gemini if router fails
-    throw error;
+  if (error) {
+    console.error('[Router] Supabase function error:', error);
+    throw new Error(`Edge function error: ${error.message || JSON.stringify(error)}`);
   }
+
+  console.log('[Router] Function response:', data);
+
+  if (!data) {
+    throw new Error('No data returned from edge function');
+  }
+
+  if (typeof data === 'object' && 'error' in data) {
+    throw new Error(`Edge function returned error: ${data.error}`);
+  }
+
+  if (typeof data === 'object' && 'response' in data) {
+    return data.response as string;
+  }
+
+  throw new Error(`Invalid response format: ${JSON.stringify(data)}`);
 };
 
 export const sendMessageToAI = async (userMessage: string, league: League = 'NHL'): Promise<string> => {
-  if (USE_ROUTER) {
-    try {
-      return await sendViaRouter(userMessage, league);
-    } catch (routerError) {
-      console.warn('[Router] Falling back to direct Gemini:', routerError);
-      // Fall through to direct implementation
-    }
+  if (!USE_ROUTER) {
+    throw new Error('Direct API access is not configured. Please use the edge function router.');
   }
 
-  // Original direct Gemini implementation
   try {
-    const chat = initializeChat(league);
-    const contextInjection = rawScheduleContext 
-      ? `\n[SYSTEM INJECTION - CURRENT ${league} ODDS (Source: The Odds API)]:\n${rawScheduleContext}\n\n[USER]:\n`
-      : ``;
-    const response = await chat.sendMessage({ message: contextInjection + userMessage });
-    return response.text || "No analysis generated.";
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    throw error;
+    console.log('[AI] Sending message via router...');
+    const result = await sendViaRouter(userMessage, league);
+    console.log('[AI] Router response received');
+    return result;
+  } catch (routerError) {
+    console.error('[AI] Router error details:', routerError);
+    throw new Error(`Failed to communicate with AI service: ${routerError instanceof Error ? routerError.message : 'Unknown error'}`);
   }
 };
