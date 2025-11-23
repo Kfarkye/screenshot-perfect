@@ -335,22 +335,59 @@ const App: React.FC = () => {
 
     if (activeTab !== 'chat') setActiveTab('chat');
 
+    let userMsg: Message | null = null;
     if (retryCount === 0) {
-        const userMsg: Message = {
+        userMsg = {
           id: crypto.randomUUID(),
           role: 'user',
           content: trimmedContent,
           timestamp: Date.now(),
           status: 'complete',
         };
-        setMessages((prev) => [...prev, userMsg]);
+        setMessages((prev) => [...prev, userMsg!]);
         setIsLoading(true);
     }
 
     const startTime = performance.now();
 
     try {
-      // Pass activeLeague to the service
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        'https://luohiaujigqcjpzicxiz.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA'
+      );
+
+      // Get or create conversation
+      const sessionId = `session_${Date.now()}`;
+      let conversationId = localStorage.getItem('conversationId');
+      
+      if (!conversationId) {
+        const { data: convData, error: convError } = await supabase
+          .from('ai_conversations')
+          .insert({
+            session_id: sessionId,
+            user_id: crypto.randomUUID(), // Anonymous user for now
+            title: `${activeLeague} Analysis`
+          })
+          .select('id')
+          .single();
+
+        if (!convError && convData) {
+          conversationId = convData.id;
+          localStorage.setItem('conversationId', conversationId);
+        }
+      }
+
+      // Store user message in DB
+      if (userMsg && conversationId) {
+        await supabase.from('ai_messages').insert({
+          conversation_id: conversationId,
+          role: 'user',
+          content: trimmedContent
+        });
+      }
+
+      // Get AI response
       const responseText = await sendMessageToAI(trimmedContent, activeLeague);
       
       if (activeRequestRef.current !== requestId) return;
@@ -365,6 +402,17 @@ const App: React.FC = () => {
         metadata: { latency }
       };
       setMessages((prev) => [...prev, aiMsg]);
+
+      // Store AI message in DB
+      if (conversationId) {
+        await supabase.from('ai_messages').insert({
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: responseText,
+          provider: 'gemini',
+          model: 'gemini-3-pro-preview'
+        });
+      }
 
     } catch (error) {
       if (activeRequestRef.current !== requestId) return;
