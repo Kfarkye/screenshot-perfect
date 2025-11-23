@@ -397,7 +397,7 @@ const sendViaRouter = async (userMessage: string, league: League): Promise<strin
   );
 
   const contextInjection = rawScheduleContext 
-    ? `Context: Current ${league} odds and games:\n${rawScheduleContext}\n\nQuestion: ${userMessage}`
+    ? `[SYSTEM INJECTION - CURRENT ${league} ODDS (Source: The Odds API)]:\n${rawScheduleContext}\n\n[USER]:\n${userMessage}`
     : userMessage;
 
   console.log('[Router] Calling ai-chat-router function...');

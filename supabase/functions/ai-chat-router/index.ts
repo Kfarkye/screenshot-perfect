@@ -273,17 +273,30 @@ async function callGemini(messages: ChatMessage[], ctx: RequestContext): Promise
   const apiKey = Deno.env.get('GEMINI_API_KEY');
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
 
-  const geminiMessages = messages.map(msg => ({
-    role: msg.role === 'assistant' ? 'model' : msg.role,
-    parts: [{ text: msg.content }]
-  }));
+  // Format messages - inject system message as first user message for better context
+  const systemMessage = messages.find(m => m.role === 'system');
+  const userMessages = messages.filter(m => m.role !== 'system');
+  
+  const geminiMessages = userMessages.map((msg, idx) => {
+    // Inject system context into first user message
+    if (idx === 0 && systemMessage) {
+      return {
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: `${systemMessage.content}\n\n${msg.content}` }]
+      };
+    }
+    return {
+      role: msg.role === 'assistant' ? 'model' : msg.role,
+      parts: [{ text: msg.content }]
+    };
+  });
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -291,8 +304,9 @@ async function callGemini(messages: ChatMessage[], ctx: RequestContext): Promise
           contents: geminiMessages,
           generationConfig: { 
             maxOutputTokens: 8000,
-            temperature: 0.7
-          }
+            temperature: 1.0
+          },
+          tools: [{ googleSearch: {} }]
         }),
         signal: controller.signal
       }
