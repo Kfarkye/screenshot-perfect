@@ -114,19 +114,27 @@ const extractMarketData = (bookmaker: any, game: any): MarketData => {
 // Generic ESPN Parser (Works for NFL and NBA)
 const fetchEspnStandings = async (league: League): Promise<Record<string, string>> => {
   try {
+    console.log(`[Standings] Fetching ${league} standings...`);
     const { data, error } = await supabase.functions.invoke('fetch-standings', {
       body: { league }
     });
     
-    if (error) throw error;
+    if (error) {
+      console.error('[Standings] Error:', error);
+      throw error;
+    }
     
+    console.log(`[Standings] Raw ${league} data:`, data);
     const standings: Record<string, string> = {};
 
     const processEntries = (entries: any[]) => {
       entries.forEach((entry: any) => {
         const abbr = entry.team.abbreviation;
         const record = entry.stats.find((s: any) => s.name === 'overall')?.displayValue;
-        if (abbr && record) standings[abbr] = record;
+        if (abbr && record) {
+          standings[abbr] = record;
+          console.log(`[Standings] ${abbr}: ${record}`);
+        }
       });
     };
 
@@ -135,9 +143,11 @@ const fetchEspnStandings = async (league: League): Promise<Record<string, string
         if (div.standings?.entries) processEntries(div.standings.entries);
       });
     });
+    
+    console.log(`[Standings] Total teams found: ${Object.keys(standings).length}`, standings);
     return standings;
   } catch (e) {
-    console.warn("Failed to fetch ESPN standings:", e);
+    console.error("[Standings] Failed to fetch ESPN standings:", e);
     return {};
   }
 };
