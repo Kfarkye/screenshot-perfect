@@ -136,6 +136,12 @@ Deno.serve(async (req) => {
     const response = await fetch(url);
     
     if (!response.ok) {
+      if (response.status === 422) {
+        console.log('[Odds API] No odds available for this date range (422), returning empty array');
+        return new Response(JSON.stringify([]), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       const errorText = await response.text();
       console.error('[Odds API] Error:', response.status, errorText);
       throw new Error(`Odds API error: ${response.status}`);
