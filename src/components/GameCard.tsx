@@ -354,18 +354,21 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
         content: `You are analyzing this ${game.league} game: ${game.awayTeam} @ ${game.homeTeam}. Current pick: ${pick.pick_side} with ${pick.confidence_score}% confidence. Reasoning: ${pick.reasoning_text}. Odds: ${pick.odds_at_generation}.`
       };
       
+      const messages = [
+        systemMessage,
+        ...chatMessages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        })),
+        { role: "user" as const, content: inputMessage }
+      ];
+      
+      console.log('Sending messages count:', messages.length);
+      console.log('System message:', systemMessage.content);
+      
       // Send messages in the correct format
       const { data, error } = await supabase.functions.invoke("ai-chat-router", {
-        body: {
-          messages: [
-            systemMessage,
-            ...chatMessages.map(msg => ({
-              role: msg.role,
-              content: msg.content
-            })),
-            { role: "user" as const, content: inputMessage }
-          ]
-        },
+        body: { messages }
       });
 
       if (error) {
@@ -375,23 +378,36 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
 
       console.log('AI Router full response type:', typeof data, data);
       
-      // Supabase returns the actual response data directly when it's a stream
-      // For SSE streams, it may return the full text
       let responseText = '';
       
       if (!data) {
         throw new Error('No response data received');
       }
       
-      // Check if it's a Response object that needs to be read
+      // Parse SSE stream if it's a Response object
       if (data instanceof Response) {
         const text = await data.text();
-        console.log('Response text:', text);
-        responseText = text;
+        console.log('Raw SSE response:', text);
+        
+        // Parse SSE format: extract text from "event: text" lines
+        const lines = text.split('\n');
+        const textChunks: string[] = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (line.startsWith('event: text')) {
+            // Next line should be the data
+            const nextLine = lines[i + 1]?.trim();
+            if (nextLine?.startsWith('data: ')) {
+              textChunks.push(nextLine.substring(6)); // Remove "data: " prefix
+            }
+          }
+        }
+        
+        responseText = textChunks.join('');
       } else if (typeof data === 'string') {
         responseText = data;
       } else if (data && typeof data === 'object') {
-        // Check various possible response formats
         responseText = data.response || data.content || data.text || JSON.stringify(data);
       }
 
