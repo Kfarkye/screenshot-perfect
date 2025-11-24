@@ -108,7 +108,7 @@ function generateGameKey(game: Partial<Game>): string {
 async function fetchOddsApi(apiKey: string, params: Record<string, any>, endpoint: 'odds' | 'scores') {
     const query = new URLSearchParams({ apiKey, dateFormat: 'iso' });
   
-    if (params.daysFrom) query.append('daysFrom', params.daysFrom.toString());
+    if (params.daysFrom !== undefined) query.append('daysFrom', params.daysFrom.toString());
   
     // Endpoint-specific parameters
     if (endpoint === 'odds') {
@@ -119,12 +119,12 @@ async function fetchOddsApi(apiKey: string, params: Record<string, any>, endpoin
     }
   
     const url = `https://api.the-odds-api.com/v4/sports/${params.sport}/${endpoint}?${query}`;
+    console.log(`[OddsAPI ${endpoint}] Fetching: ${url.replace(apiKey, 'KEY_HIDDEN')}`);
   
     try {
       const res = await fetchWithTimeout(url);
   
       if (res.status === 422) {
-          // This often happens when asking for odds too far in the future or scores too far in the past
           console.warn(`[OddsAPI ${endpoint}] Validation error (422). Likely date/market unavailable.`);
           return [];
       }
@@ -134,15 +134,19 @@ async function fetchOddsApi(apiKey: string, params: Record<string, any>, endpoin
         throw new Error(`API Error ${res.status} for ${endpoint}`);
       }
   
-      return await res.json();
+      const data = await res.json();
+      console.log(`[OddsAPI ${endpoint}] Returned ${Array.isArray(data) ? data.length : 0} games`);
+      return data;
     } catch (e) {
       console.error(`[OddsAPI ${endpoint}] Fetch failed:`, (e as Error).message);
-      return null; // Return null to signal failure without crashing the aggregation
+      return null;
     }
   }
 
 // 2. Aggregated OddsAPI Service (Scores + Odds)
 async function getAggregatedOddsApiData(apiKey: string, params: OddsApiParams): Promise<Game[]> {
+    console.log(`[Aggregation] Fetching for markets: ${params.markets || 'h2h,spreads,totals'}`);
+    
     // Fetch both odds and scores in parallel
     const [oddsResult, scoresResult] = await Promise.all([
         fetchOddsApi(apiKey, params, 'odds'),
@@ -152,11 +156,16 @@ async function getAggregatedOddsApiData(apiKey: string, params: OddsApiParams): 
     const odds = Array.isArray(oddsResult) ? oddsResult : [];
     const scores = Array.isArray(scoresResult) ? scoresResult : [];
 
+    console.log(`[Aggregation] Odds: ${odds.length} games, Scores: ${scores.length} games`);
+
     // Merge the data based on Game ID (which is consistent within OddsAPI)
     const dataMap = new Map<string, Game>();
 
     // 1. Start with odds data as it contains bookmakers
     odds.forEach((game: any) => {
+        const bookmakerCount = game.bookmakers?.length || 0;
+        const marketTypes = game.bookmakers?.[0]?.markets?.map((m: any) => m.key).join(',') || 'none';
+        console.log(`[Aggregation] Game ${game.id}: ${bookmakerCount} bookmakers, markets: ${marketTypes}`);
         dataMap.set(game.id, game);
     });
 
@@ -164,11 +173,11 @@ async function getAggregatedOddsApiData(apiKey: string, params: OddsApiParams): 
     scores.forEach((game: any) => {
         if (dataMap.has(game.id)) {
             const existing = dataMap.get(game.id)!;
-            // Merge scores/completed status from the 'scores' endpoint
             existing.scores = game.scores;
             existing.completed = game.completed;
         } else {
             // Game only found in scores (e.g., odds expired but game occurred)
+            console.log(`[Aggregation] Game ${game.id} only in scores, no odds data`);
             dataMap.set(game.id, game);
         }
     });
