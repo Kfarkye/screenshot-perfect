@@ -100,9 +100,36 @@ Answer questions about this pick concisely and helpfully.`
 
       if (error) throw error;
 
+      console.log('AI Router response:', data);
+      
+      // Handle streaming response or direct response
+      let responseText = '';
+      if (typeof data === 'string') {
+        // If response is SSE stream text, extract the content
+        const lines = data.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const jsonData = JSON.parse(line.substring(6));
+              if (jsonData.type === 'content') {
+                responseText += jsonData.content;
+              }
+            } catch (e) {
+              // Ignore parse errors for non-JSON lines
+            }
+          }
+        }
+      } else if (data?.response) {
+        responseText = data.response;
+      } else if (data?.content) {
+        responseText = data.content;
+      } else {
+        responseText = 'Sorry, I encountered an error processing the response.';
+      }
+
       const assistantMsg: ChatMessage = { 
         role: 'assistant', 
-        content: data?.response || data?.content || 'Sorry, I encountered an error.'
+        content: responseText || 'Sorry, I encountered an error.'
       };
       setChatMessages(prev => [...prev, assistantMsg]);
     } catch (error) {

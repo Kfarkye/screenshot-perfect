@@ -344,31 +344,62 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
     setInputMessage("");
     setIsAILoading(true);
 
-    // AI interaction logic (remains unchanged as it's functional)
+    // AI interaction logic
     try {
-      // Call AI with game context
-      // Note: Ensure dynamic import works in your environment or use top-level imports.
       const { supabase } = await import("@/integrations/supabase/client");
+      
+      // Build system message with game context
+      const systemMessage = {
+        role: "system" as const,
+        content: `You are analyzing this ${game.league} game: ${game.awayTeam} @ ${game.homeTeam}. Current pick: ${pick.pick_side} with ${pick.confidence_score}% confidence. Reasoning: ${pick.reasoning_text}. Odds: ${pick.odds_at_generation}.`
+      };
+      
+      // Send messages in the correct format
       const { data, error } = await supabase.functions.invoke("ai-chat-router", {
         body: {
-          userMessage: inputMessage,
-          gameContext: {
-            awayTeam: game.awayTeam,
-            homeTeam: game.homeTeam,
-            league: game.league,
-            pick: pick.pick_side,
-            confidence: pick.confidence_score,
-            reasoning: pick.reasoning_text,
-            odds: pick.odds_at_generation,
-          },
+          messages: [
+            systemMessage,
+            ...chatMessages.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            })),
+            { role: "user" as const, content: inputMessage }
+          ]
         },
       });
 
       if (error) throw error;
 
+      console.log('AI Router response:', data);
+      
+      // Handle streaming response or direct response
+      let responseText = '';
+      if (typeof data === 'string') {
+        // If response is SSE stream text, extract the content
+        const lines = data.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const jsonData = JSON.parse(line.substring(6));
+              if (jsonData.type === 'content') {
+                responseText += jsonData.content;
+              }
+            } catch (e) {
+              // Ignore parse errors for non-JSON lines
+            }
+          }
+        }
+      } else if (data?.response) {
+        responseText = data.response;
+      } else if (data?.content) {
+        responseText = data.content;
+      } else {
+        responseText = 'Sorry, I encountered an error processing the response.';
+      }
+
       const assistantMsg: ChatMessage = {
         role: "assistant",
-        content: data.response || "Sorry, I encountered an error.",
+        content: responseText || "Sorry, I encountered an error.",
       };
       setChatMessages((prev) => [...prev, assistantMsg]);
     } catch (error) {
