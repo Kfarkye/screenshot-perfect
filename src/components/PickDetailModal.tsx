@@ -73,19 +73,24 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({
     try {
       // Call AI with game context
       const { supabase } = await import('@/integrations/supabase/client');
+      
+      // Build messages array with system context
+      const messages = [
+        {
+          role: 'system',
+          content: `You are analyzing a ${game.league} betting pick for ${game.awayTeam} @ ${game.homeTeam}. 
+Pick: ${pick.pick_side} at ${pick.odds_at_generation > 0 ? '+' : ''}${pick.odds_at_generation}
+Confidence: ${pick.confidence_score}%
+Reasoning: ${pick.reasoning_text}
+
+Answer questions about this pick concisely and helpfully.`
+        },
+        ...chatMessages.map(msg => ({ role: msg.role, content: msg.content })),
+        { role: 'user', content: inputMessage }
+      ];
+
       const { data, error } = await supabase.functions.invoke('ai-chat-router', {
-        body: {
-          userMessage: inputMessage,
-          gameContext: {
-            awayTeam: game.awayTeam,
-            homeTeam: game.homeTeam,
-            league: game.league,
-            pick: pick.pick_side,
-            confidence: pick.confidence_score,
-            reasoning: pick.reasoning_text,
-            odds: pick.odds_at_generation,
-          }
-        }
+        body: { messages }
       });
 
       if (error) throw error;
