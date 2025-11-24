@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PickDetailModalProps {
   pick: PickData;
@@ -71,13 +72,10 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({
     setIsAILoading(true);
 
     try {
-      // Call AI with game context
-      const { supabase } = await import('@/integrations/supabase/client');
-      
-      // Build messages array with system context
+      // Build messages array with system context and conversation history
       const messages = [
         {
-          role: 'system',
+          role: 'system' as const,
           content: `You are analyzing a ${game.league} betting pick for ${game.awayTeam} @ ${game.homeTeam}. 
 Pick: ${pick.pick_side} at ${pick.odds_at_generation > 0 ? '+' : ''}${pick.odds_at_generation}
 Confidence: ${pick.confidence_score}%
@@ -85,26 +83,34 @@ Reasoning: ${pick.reasoning_text}
 
 Answer questions about this pick concisely and helpfully.`
         },
-        ...chatMessages.map(msg => ({ role: msg.role, content: msg.content })),
-        { role: 'user', content: inputMessage }
+        ...chatMessages.map(msg => ({ 
+          role: msg.role as 'user' | 'assistant', 
+          content: msg.content 
+        })),
+        { role: 'user' as const, content: inputMessage }
       ];
+
+      console.log('Sending to ai-chat-router:', { messages });
 
       const { data, error } = await supabase.functions.invoke('ai-chat-router', {
         body: { messages }
       });
 
+      console.log('Response from ai-chat-router:', { data, error });
+
       if (error) throw error;
 
       const assistantMsg: ChatMessage = { 
         role: 'assistant', 
-        content: data.response || 'Sorry, I encountered an error.'
+        content: data?.response || data?.content || 'Sorry, I encountered an error.'
       };
       setChatMessages(prev => [...prev, assistantMsg]);
     } catch (error) {
       console.error('AI chat error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
       setChatMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, I encountered an error processing your request.'
+        content: `Error: ${errorMsg}`
       }]);
     } finally {
       setIsAILoading(false);
