@@ -13,6 +13,24 @@ interface OddsGame {
   away_team: string;
 }
 
+interface ESPNGame {
+  id: string;
+  date: string;
+  name: string;
+  shortName: string;
+  season: { year: number };
+  week: { number: number };
+  competitions: Array<{
+    id: string;
+    date: string;
+    competitors: Array<{
+      homeAway: string;
+      team: { displayName: string };
+    }>;
+    venue?: { fullName: string };
+  }>;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -34,57 +52,104 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     console.log('[Seed NFL] Starting NFL schedule seed...');
-
-    // Fetch NFL schedule from Odds API
-    const url = `https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds?apiKey=${ODDS_API_KEY}&regions=us&markets=h2h&oddsFormat=american&dateFormat=iso`;
-    
-    console.log('[Seed NFL] Fetching from Odds API...');
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Seed NFL] API Error:', response.status, errorText);
-      throw new Error(`Odds API error: ${response.status}`);
-    }
-
-    const games: OddsGame[] = await response.json();
-    console.log(`[Seed NFL] Fetched ${games.length} games from API`);
-
-    // Determine current season (year) and week
     const now = new Date();
     const season = now.getFullYear().toString();
 
-    // Transform games for database
-    const gamesToInsert = games.map((game, index) => {
-      const commenceTime = new Date(game.commence_time);
-      
-      // Simple week calculation (this is approximate - can be refined)
-      const seasonStart = new Date(season + '-09-01'); // NFL typically starts early September
-      const weeksSinceStart = Math.floor((commenceTime.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
-      const week = Math.max(1, Math.min(18, weeksSinceStart + 1)); // NFL regular season is 18 weeks
+    // Step 1: Fetch from Odds API (games with active betting lines, 1-2 weeks out)
+    console.log('[Seed NFL] Fetching from Odds API...');
+    const oddsUrl = `https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds?apiKey=${ODDS_API_KEY}&regions=us&markets=h2h&oddsFormat=american&dateFormat=iso`;
+    
+    const oddsResponse = await fetch(oddsUrl);
+    const oddsGames: OddsGame[] = oddsResponse.ok ? await oddsResponse.json() : [];
+    console.log(`[Seed NFL] Fetched ${oddsGames.length} games from Odds API`);
 
-      return {
-        game_id: game.id,
-        away_team: game.away_team,
-        home_team: game.home_team,
-        game_date: commenceTime.toISOString().split('T')[0],
-        start_time: commenceTime.toISOString(),
-        season,
-        week,
-        status: commenceTime > now ? 'scheduled' : 'in_progress',
-        game_data: {
-          sport_key: game.sport_key,
-          raw_data: game
+    // Step 2: Fetch from ESPN API (full season schedule - fetch all weeks)
+    console.log('[Seed NFL] Fetching full season from ESPN API...');
+    const currentYear = now.getFullYear();
+    const allESPNGames: ESPNGame[] = [];
+    
+    // NFL has 18 regular season weeks + playoffs
+    for (let week = 1; week <= 18; week++) {
+      try {
+        const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${week}&dates=${currentYear}`;
+        const espnResponse = await fetch(espnUrl);
+        
+        if (espnResponse.ok) {
+          const espnData = await espnResponse.json();
+          const weekGames: ESPNGame[] = espnData.events || [];
+          allESPNGames.push(...weekGames);
+          console.log(`[Seed NFL] Week ${week}: ${weekGames.length} games`);
         }
-      };
+      } catch (err) {
+        console.error(`[Seed NFL] Error fetching week ${week}:`, err);
+      }
+    }
+    
+    console.log(`[Seed NFL] Fetched ${allESPNGames.length} total games from ESPN API`);
+
+    // Step 3: Create a map for Odds API games by team matchup
+    const oddsGameMap = new Map<string, OddsGame>();
+    oddsGames.forEach(game => {
+      // Create a key from sorted team names for matching
+      const key = [game.away_team, game.home_team].sort().join('|');
+      oddsGameMap.set(key, game);
     });
 
-    console.log('[Seed NFL] Inserting games into database...');
+    // Step 4: Transform ESPN games and merge with Odds API data
+    const gamesToInsert = allESPNGames.map((espnGame) => {
+      const competition = espnGame.competitions[0];
+      const homeCompetitor = competition.competitors.find((c: any) => c.homeAway === 'home');
+      const awayCompetitor = competition.competitors.find((c: any) => c.homeAway === 'away');
+      
+      if (!homeCompetitor || !awayCompetitor) {
+        return null;
+      }
+
+      const homeTeam = homeCompetitor.team.displayName;
+      const awayTeam = awayCompetitor.team.displayName;
+      const commenceTime = new Date(competition.date);
+      
+      // Try to find matching Odds API game
+      const matchKey = [awayTeam, homeTeam].sort().join('|');
+      const oddsGame = oddsGameMap.get(matchKey);
+
+      // Use Odds API game_id if available, otherwise generate from ESPN
+      const gameId = oddsGame?.id || competition.id;
+
+      return {
+        game_id: gameId,
+        away_team: awayTeam,
+        home_team: homeTeam,
+        game_date: commenceTime.toISOString().split('T')[0],
+        start_time: commenceTime.toISOString(),
+        season: espnGame.season.year.toString(),
+        week: espnGame.week.number,
+        status: commenceTime > now ? 'scheduled' : 'in_progress',
+        venue: competition.venue?.fullName || null,
+        game_data: {
+          sport_key: 'americanfootball_nfl',
+          espn_id: espnGame.id,
+          odds_id: oddsGame?.id || null,
+          has_betting_lines: !!oddsGame
+        }
+      };
+    }).filter((game: any) => game !== null);
+
+    // Step 5: Deduplicate games by game_id (in case ESPN has duplicates)
+    const gameMap = new Map();
+    gamesToInsert.forEach((game: any) => {
+      if (!gameMap.has(game.game_id)) {
+        gameMap.set(game.game_id, game);
+      }
+    });
+    const uniqueGames = Array.from(gameMap.values());
+    
+    console.log(`[Seed NFL] Inserting ${uniqueGames.length} unique games into database...`);
 
     // Upsert games (insert or update if game_id already exists)
     const { data, error } = await supabase
       .from('nfl_games')
-      .upsert(gamesToInsert, {
+      .upsert(uniqueGames, {
         onConflict: 'game_id',
         ignoreDuplicates: false
       })
@@ -102,7 +167,9 @@ Deno.serve(async (req) => {
         success: true,
         message: `Seeded ${data?.length || 0} NFL games`,
         season,
-        games_seeded: data?.length || 0
+        games_seeded: data?.length || 0,
+        odds_api_games: oddsGames.length,
+        espn_games: allESPNGames.length
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
