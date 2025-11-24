@@ -51,11 +51,6 @@ export default {
           tertiary: "hsl(var(--essence-content-tertiary))",
           inverse: "hsl(var(--essence-content-inverse))",
         },
-        accent: {
-          DEFAULT: "hsl(var(--essence-accent-default))",
-          hover: "hsl(var(--essence-accent-hover))",
-          text: "hsl(var(--essence-accent-text))",
-        },
         semantic: {
           success: "hsl(var(--essence-semantic-success))",
           warning: "hsl(var(--essence-semantic-warning))",
@@ -91,6 +86,8 @@ export default {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
+          hover: "hsl(var(--essence-accent-hover))",
+          text: "hsl(var(--essence-accent-text))",
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",
