@@ -13,21 +13,11 @@ const PREFERRED_BOOKMAKERS = ["draftkings", "fanduel", "betmgm", "williamhill_us
 
 // --- ENVIRONMENT HANDLING ---
 
-// Helper for framework-agnostic environment variable access (Vite/Next.js)
-const getEnv = (viteKey: string, nextKey: string): string => {
-  if (typeof import.meta !== "undefined" && import.meta.env && import.meta.env[viteKey]) {
-    return import.meta.env[viteKey];
-  }
-  if (typeof process !== "undefined" && process.env && process.env[nextKey]) {
-    return process.env[nextKey];
-  }
-  return "";
-};
-
-const SUPABASE_ANON_KEY = getEnv("VITE_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY");
+// Hardcoded Supabase configuration
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA";
 const API_BASE_URL = "https://luohiaujigqcjpzicxiz.supabase.co/functions/v1/ai-chat-router";
-// For client-side fallback only (Security risk if exposed)
-const CLIENT_GEMINI_API_KEY = getEnv("VITE_GEMINI_API_KEY", "NEXT_PUBLIC_GEMINI_API_KEY");
+// For client-side fallback only (not used when USE_ROUTER is true)
+const CLIENT_GEMINI_API_KEY = "";
 
 // --- TYPE DEFINITIONS ---
 
@@ -606,25 +596,22 @@ const sendViaRouter = async (userMessage: string, history: Message[], league: Le
     ? `[SYSTEM INJECTION - CURRENT ${league} ODDS & SCHEDULE (Time: ${new Date().toLocaleTimeString()})]:\n${rawScheduleContext}\n\n[USER MESSAGE]:\n${userMessage}`
     : userMessage;
 
-  // 3. History Formatting (for multi-turn context)
-  // Format history into the structure expected by Gemini API (user/model roles, parts array)
-  const formattedHistory: Content[] = history.map((msg) => ({
-    role: msg.role === "user" ? "user" : "model",
-    parts: [{ text: msg.content }],
+  // 3. History Formatting (for edge function format: {role, content})
+  // The edge function expects messages with role and content (not parts array)
+  const formattedHistory = history.map((msg) => ({
+    role: msg.role === "user" ? "user" : ("assistant" as const),
+    content: msg.content,
   }));
 
-  // 4. Construct Payload
+  // 4. Construct Payload - edge function expects {role, content} format
   const payload = {
-    // This structure depends on the specific AI Chat Router implementation.
-    // Assuming the router expects the history and the latest message in Gemini format.
-    messages: [...formattedHistory, { role: "user", parts: [{ text: contextInjection }] }],
-    config: {
-      // Pass system instruction and configuration to the router
-      systemInstruction: getSystemInstruction(league),
-      preferredProvider: "gemini",
-      model: "gemini-1.5-pro-latest",
-      enableTools: true, // Ensure backend enables tools like googleSearch
-    },
+    messages: [
+      { role: "system" as const, content: getSystemInstruction(league) },
+      ...formattedHistory,
+      { role: "user" as const, content: contextInjection }
+    ],
+    mode: "chat" as const,
+    preferredProvider: "gemini" as const,
   };
 
   // 5. API Request
