@@ -44,8 +44,6 @@ const SPORT_MAPPING: Record<string, { espn_sport: string; espn_league: string }>
     'icehockey_nhl': { espn_sport: 'hockey', espn_league: 'nhl' },
     'baseball_mlb': { espn_sport: 'baseball', espn_league: 'mlb' },
     'americanfootball_ncaaf': { espn_sport: 'football', espn_league: 'college-football' },
-    'tennis_atp': { espn_sport: 'tennis', espn_league: 'atp' },
-    'tennis_wta': { espn_sport: 'tennis', espn_league: 'wta' },
     // Add other mappings as needed
 };
 
