@@ -231,7 +231,14 @@ export const fetchSchedule = async (league: League = 'NHL', targetDate: Date = n
     
     const [scoresResult, oddsResult, standingsMap] = await Promise.all([
       supabase.functions.invoke('fetch-odds', {
-        body: { sport: config.key, regions: 'us', markets: 'h2h', dateFormat: 'iso', daysFrom }
+        body: { 
+          sport: config.key, 
+          regions: 'us', 
+          markets: 'h2h', 
+          dateFormat: 'iso', 
+          daysFrom,
+          targetDate: dateKey 
+        }
       }),
       supabase.functions.invoke('fetch-odds', {
         body: { 
@@ -240,7 +247,8 @@ export const fetchSchedule = async (league: League = 'NHL', targetDate: Date = n
           markets: 'h2h,spreads,totals', 
           bookmakers: 'draftkings,fanduel,betmgm,williamhill,williamhill_us,caesars',
           dateFormat: 'iso',
-          daysFrom // Use same daysFrom as scores to fetch odds for target date
+          daysFrom,
+          targetDate: dateKey
         }
       }),
       fetchStandings(league)
