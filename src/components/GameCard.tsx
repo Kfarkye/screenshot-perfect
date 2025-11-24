@@ -490,41 +490,43 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
 
           {/* Action Buttons (Hidden until hover - Calm Technology) */}
           {/* Motion: Fade in and slight vertical translation (duration-400, ease-decelerate) */}
-          <div className="absolute bottom-6 right-6 flex gap-2 opacity-0 motion-safe:translate-y-3 group-hover/card:opacity-100 group-hover/card:motion-safe:translate-y-0 transition-all duration-400 ease-decelerate focus-within:opacity-100 focus-within:translate-y-0">
-            {/* ESSENCE Button Style: Glass Variant for secondary action */}
-            {onAnalyze && (
-              <button
-                onClick={handleAnalyzeClick}
-                // Applying Glass button styles
-                className="bg-glass-surface backdrop-blur-lg border border-glass-border hover:shadow-md text-content-primary px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard"
-              >
-                <TrendingUp size={16} strokeWidth={2.5} className="text-accent" />
-                {/* Typography: body-sm (14px) */}
-                <span className="text-body-sm font-bold">Analyze</span>
-              </button>
-            )}
-
-            {/* ESSENCE Button Style: Primary Variant for main CTA */}
-            <button
-              onClick={handleGeneratePick}
-              disabled={isGeneratingPick || boardLocked}
-              // Primary Variant
-              className="bg-accent text-content-inverse hover:bg-accent-hover px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard disabled:opacity-50 disabled:pointer-events-none"
-            >
-              {isGeneratingPick ? (
-                <>
-                  {/* Simple CSS spinner */}
-                  <div className="w-4 h-4 border-2 border-content-inverse/30 border-t-content-inverse rounded-full animate-spin" />
-                  <span className="text-body-sm font-bold">Generating...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} strokeWidth={2.5} />
-                  <span className="text-body-sm font-bold">Get Pick</span>
-                </>
+          {!isConcluded && (
+            <div className="absolute bottom-6 right-6 flex gap-2 opacity-0 motion-safe:translate-y-3 group-hover/card:opacity-100 group-hover/card:motion-safe:translate-y-0 transition-all duration-400 ease-decelerate focus-within:opacity-100 focus-within:translate-y-0">
+              {/* ESSENCE Button Style: Glass Variant for secondary action */}
+              {onAnalyze && (
+                <button
+                  onClick={handleAnalyzeClick}
+                  // Applying Glass button styles
+                  className="bg-glass-surface backdrop-blur-lg border border-glass-border hover:shadow-md text-content-primary px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard"
+                >
+                  <TrendingUp size={16} strokeWidth={2.5} className="text-accent" />
+                  {/* Typography: body-sm (14px) */}
+                  <span className="text-body-sm font-bold">Analyze</span>
+                </button>
               )}
-            </button>
-          </div>
+
+              {/* ESSENCE Button Style: Primary Variant for main CTA */}
+              <button
+                onClick={handleGeneratePick}
+                disabled={isGeneratingPick || boardLocked}
+                // Primary Variant
+                className="bg-accent text-content-inverse hover:bg-accent-hover px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {isGeneratingPick ? (
+                  <>
+                    {/* Simple CSS spinner */}
+                    <div className="w-4 h-4 border-2 border-content-inverse/30 border-t-content-inverse rounded-full animate-spin" />
+                    <span className="text-body-sm font-bold">Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={16} strokeWidth={2.5} />
+                    <span className="text-body-sm font-bold">Get Pick</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Odds Board Section */}
@@ -634,7 +636,7 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
 
       {/* Pick Display Section (if applicable) - Shown below the main content */}
       {/* Note: PickDisplay component styling is assumed to be handled separately */}
-      {(pickData || isGeneratingPick) && (
+      {!isConcluded && (pickData || isGeneratingPick) && (
         <div className="p-6 relative z-10 border-t border-glass-border">
           {isGeneratingPick ? (
             <PickDisplay pick={{} as any} isLoading />
