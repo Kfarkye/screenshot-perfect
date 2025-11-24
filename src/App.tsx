@@ -479,7 +479,7 @@ const App: React.FC = () => {
                 role="tablist" 
                 aria-label="Application Views"
                 onKeyDown={handleTabKeyDown}
-                className="flex p-1 bg-surfaceHighlight/50 border border-border/10 backdrop-blur-xl rounded-xl max-w-sm mx-auto shadow-glass-inset relative"
+                className="flex p-1.5 bg-black/60 dark:bg-black/60 border border-white/10 backdrop-blur-xl rounded-xl max-w-sm mx-auto shadow-2xl relative"
             >
                 {TABS.map((tab) => (
                 <button
@@ -502,7 +502,7 @@ const App: React.FC = () => {
                     <tab.icon size={18} strokeWidth={2.5} aria-hidden="true" />
                     <span className="tracking-wide">{tab.label}</span>
                     {activeTab === tab.id && (
-                        <div className="absolute inset-0 bg-accent/20 dark:bg-accent/20 border border-accent/40 dark:border-accent/40 shadow-lg rounded-lg -z-10 motion-safe:animate-scale-in" aria-hidden="true" />
+                        <div className="absolute inset-0 bg-white/10 dark:bg-white/10 border border-white/20 dark:border-white/20 shadow-lg backdrop-blur-sm rounded-lg -z-10 motion-safe:animate-scale-in" aria-hidden="true" />
                     )}
                 </button>
                 ))}
