@@ -1,19 +1,3 @@
-This update enhances the AI chat functionality within the `PickDetailModal` by significantly improving context injection and ensuring a better user experience through real-time streaming responses.
-
-**Key Enhancements:**
-
-1.  **Robust Context Injection:** A new `generateSystemPrompt` function creates a detailed, structured prompt for the AI. This ensures the AI is tightly focused on the specific game, the current score (if applicable), and the original AI analysis, preventing it from losing context.
-2.  **Streaming Responses (SSE):** The `handleSendMessage` logic has been upgraded to handle Server-Sent Events (SSE) in real-time.
-      * It now uses `response.body.getReader()` to process the AI response as it arrives, streaming the text word-by-word into the chat UI.
-      * This provides a much faster and more engaging user experience compared to waiting for the complete response.
-3.  **Improved Chat UI:**
-      * The `ChatMessage` interface now includes an `id` and `error` state to manage streaming updates and error displays efficiently.
-      * The loading indicator is now integrated directly into the assistant's message bubble during the streaming process.
-4.  **Error Handling:** Enhanced error detection during the streaming process, with appropriate feedback provided to the user if the AI service fails.
-
-<!-- end list -->
-
-```tsx
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import type { GameData, MarketData, PickData } from "../types";
 // PickDisplay and PickDetailModal are defined later in the file for cohesive updates
@@ -1206,4 +1190,3 @@ export const PickDisplay: React.FC<PickDisplayProps> = ({ pick, isLoading = fals
     </button>
   );
 };
-```
