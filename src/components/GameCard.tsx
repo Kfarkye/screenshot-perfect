@@ -294,7 +294,7 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
 
   return (
     <article
-        className="relative overflow-hidden mb-4 rounded-2xl border border-border/20 bg-noise group/card transition-all duration-500 ease-out hover:border-border/40 shadow-glass hover:shadow-md backdrop-blur-sm bg-surface/80 motion-safe:hover:scale-[1.005]"
+        className="relative overflow-hidden mb-4 rounded-2xl border border-gray-200/50 dark:border-white/10 bg-noise group/card transition-all duration-500 ease-out hover:border-gray-300 dark:hover:border-white/20 shadow-glass hover:shadow-md backdrop-blur-sm bg-white dark:bg-black/60 motion-safe:hover:scale-[1.005]"
         style={{ willChange: 'transform' }}
     >
       {/* Subtle gradient overlay on hover */}
