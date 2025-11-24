@@ -539,18 +539,32 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
             <div className="absolute inset-0 bg-surface-primary/50 backdrop-blur-sm z-20 flex items-center justify-center flex-col gap-3 px-6">
               <Lock size={20} className="text-content-secondary" />
               {isConcluded ? (
-                <div className="text-center space-y-1">
+                <div className="text-center space-y-2">
                   <p className="text-caption-1 font-bold text-accent uppercase tracking-wider">Final Score</p>
                   <p className="text-body font-semibold text-content-primary">
                     {awayTeam} {scores.away} - {homeTeam} {scores.home}
                   </p>
-                  {winner && winner !== "tie" && (
+                  {winner && winner !== "tie" && processedOdds?.awayPL.line !== "-" && (
                     <p className="text-caption-2 text-content-secondary">
                       {winner === "away" ? awayTeam : homeTeam} covered{" "}
-                      {processedOdds?.awayPL.line !== "-" 
-                        ? `the ${winner === "away" ? processedOdds.awayPL.line : processedOdds.homePL.line} spread`
-                        : ""}
+                      the {winner === "away" ? processedOdds.awayPL.line : processedOdds.homePL.line} spread
                     </p>
+                  )}
+                  {processedOdds && (
+                    <div className="pt-2 border-t border-glass-border/30 mt-2 space-y-0.5">
+                      <p className="text-caption-2 font-semibold text-content-tertiary uppercase tracking-wider">Closing Line</p>
+                      <div className="flex gap-3 justify-center text-caption-2 text-content-secondary font-mono">
+                        {processedOdds.awayPL.line !== "-" && (
+                          <span>{spreadLabel}: {processedOdds.awayPL.line}/{processedOdds.homePL.line}</span>
+                        )}
+                        {processedOdds.total !== "-" && (
+                          <span>O/U: {processedOdds.total}</span>
+                        )}
+                        {processedOdds.awayML && processedOdds.homeML && (
+                          <span>ML: {processedOdds.awayML}/{processedOdds.homeML}</span>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               ) : (
