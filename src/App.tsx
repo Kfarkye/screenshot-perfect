@@ -5,8 +5,6 @@ import React, { useState, useRef, useEffect, useCallback, lazy, Suspense, useMem
 import { Header } from './components/Header';
 import { ChatMessage } from './components/ChatMessage';
 import { InputArea, InputAreaHandle } from './components/InputArea';
-import { AdminSeedButton } from './components/AdminSeedButton';
-import { AdminPicksButton } from './components/AdminPicksButton';
 import { useAuth } from './hooks/useAuth';
 
 // Types (Using 'import type' ensures types are erased at compile time for optimal builds)
@@ -481,11 +479,6 @@ const App: React.FC = () => {
           onLeagueChange={handleLeagueChange} 
           onSignOut={signOut}
         />
-
-        <div className="flex-shrink-0 p-4 border-b border-border/50 flex justify-center">
-              <AdminSeedButton />
-              <AdminPicksButton />
-        </div>
 
         <nav className="flex-shrink-0 px-4 pt-6 pb-2 z-40 sm:px-6" aria-label="Main Navigation">
             <div 
