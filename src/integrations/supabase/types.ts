@@ -826,6 +826,30 @@ export type Database = {
           },
         ]
       }
+      audit_nfl_team_stats: {
+        Row: {
+          audit_id: number
+          changed_at: string
+          changed_by: string
+          old_data: Json | null
+          operation: string
+        }
+        Insert: {
+          audit_id?: number
+          changed_at?: string
+          changed_by?: string
+          old_data?: Json | null
+          operation: string
+        }
+        Update: {
+          audit_id?: number
+          changed_at?: string
+          changed_by?: string
+          old_data?: Json | null
+          operation?: string
+        }
+        Relationships: []
+      }
       betting_lines_history: {
         Row: {
           away_team: string
@@ -1654,6 +1678,104 @@ export type Database = {
           updated_at?: string | null
           venue?: string | null
           week?: number
+        }
+        Relationships: []
+      }
+      nfl_team_stats: {
+        Row: {
+          created_at: string
+          id: string
+          last_updated: string
+          passing_yards_allowed_per_game: number | null
+          passing_yards_per_game: number | null
+          points_allowed_per_game: number | null
+          points_per_game: number | null
+          red_zone_pct: number | null
+          rushing_yards_allowed_per_game: number | null
+          rushing_yards_per_game: number | null
+          sacks_per_game: number | null
+          season_type: Database["public"]["Enums"]["nfl_season_type"]
+          season_year: number
+          takeaways_per_game: number | null
+          team_abbreviation: string
+          third_down_pct: number | null
+          total_yards_allowed_per_game: number | null
+          total_yards_per_game: number | null
+          turnovers_per_game: number | null
+          week: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_updated?: string
+          passing_yards_allowed_per_game?: number | null
+          passing_yards_per_game?: number | null
+          points_allowed_per_game?: number | null
+          points_per_game?: number | null
+          red_zone_pct?: number | null
+          rushing_yards_allowed_per_game?: number | null
+          rushing_yards_per_game?: number | null
+          sacks_per_game?: number | null
+          season_type: Database["public"]["Enums"]["nfl_season_type"]
+          season_year: number
+          takeaways_per_game?: number | null
+          team_abbreviation: string
+          third_down_pct?: number | null
+          total_yards_allowed_per_game?: number | null
+          total_yards_per_game?: number | null
+          turnovers_per_game?: number | null
+          week: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_updated?: string
+          passing_yards_allowed_per_game?: number | null
+          passing_yards_per_game?: number | null
+          points_allowed_per_game?: number | null
+          points_per_game?: number | null
+          red_zone_pct?: number | null
+          rushing_yards_allowed_per_game?: number | null
+          rushing_yards_per_game?: number | null
+          sacks_per_game?: number | null
+          season_type?: Database["public"]["Enums"]["nfl_season_type"]
+          season_year?: number
+          takeaways_per_game?: number | null
+          team_abbreviation?: string
+          third_down_pct?: number | null
+          total_yards_allowed_per_game?: number | null
+          total_yards_per_game?: number | null
+          turnovers_per_game?: number | null
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfl_team_stats_team_abbreviation_fkey"
+            columns: ["team_abbreviation"]
+            isOneToOne: false
+            referencedRelation: "nfl_teams"
+            referencedColumns: ["abbreviation"]
+          },
+        ]
+      }
+      nfl_teams: {
+        Row: {
+          abbreviation: string
+          created_at: string
+          location: string | null
+          name: string
+        }
+        Insert: {
+          abbreviation: string
+          created_at?: string
+          location?: string | null
+          name: string
+        }
+        Update: {
+          abbreviation?: string
+          created_at?: string
+          location?: string | null
+          name?: string
         }
         Relationships: []
       }
@@ -3817,6 +3939,7 @@ export type Database = {
         | "screenshot"
         | "note"
       job_priority: "low" | "medium" | "high" | "urgent"
+      nfl_season_type: "PRE" | "REG" | "POST"
       pipeline_stage:
         | "prospecting"
         | "working"
@@ -3986,6 +4109,7 @@ export const Constants = {
         "note",
       ],
       job_priority: ["low", "medium", "high", "urgent"],
+      nfl_season_type: ["PRE", "REG", "POST"],
       pipeline_stage: [
         "prospecting",
         "working",
