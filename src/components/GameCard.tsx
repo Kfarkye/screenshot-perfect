@@ -63,8 +63,8 @@ const TeamLogo = React.memo(({ teamAbbr, teamName, league }: TeamLogoProps) => {
 
   if (loadState === 'error') {
     return (
-      <div className="w-10 h-10 rounded-lg bg-surfaceHighlight flex items-center justify-center border border-border/10 shadow-inner" title={`${teamName} logo failed to load`}>
-        <span className="text-xs font-bold text-textSecondary tracking-wider">{teamAbbr.substring(0, 3)}</span>
+      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center border border-border/10 shadow-inner" title={`${teamName} logo failed to load`}>
+        <span className="text-xs font-bold text-muted-foreground tracking-wider">{teamAbbr.substring(0, 3)}</span>
       </div>
     );
   }
@@ -72,7 +72,7 @@ const TeamLogo = React.memo(({ teamAbbr, teamName, league }: TeamLogoProps) => {
   return (
     <div className="w-10 h-10 flex items-center justify-center relative">
        {loadState === 'loading' && (
-           <div className="absolute inset-0 rounded-lg bg-surfaceHighlight/50 animate-pulse" aria-hidden="true" />
+           <div className="absolute inset-0 rounded-lg bg-muted/50 animate-pulse" aria-hidden="true" />
        )}
        <img 
          src={src} 
@@ -112,10 +112,10 @@ const OddsCell = React.memo(({ label, main, sub, isFavorite = false, isDisabled 
     }, [label, main, sub, isFavorite, isDisabled]);
 
     const mainColor = useMemo(() => {
-        if (isDisabled) return 'text-textTertiary/70';
+        if (isDisabled) return 'text-muted-foreground/70';
         if (movement === 'up') return 'text-success';
-        if (movement === 'down') return 'text-danger';
-        return isFavorite ? 'text-accent' : 'text-textPrimary';
+        if (movement === 'down') return 'text-destructive';
+        return isFavorite ? 'text-accent' : 'text-foreground';
     }, [isFavorite, isDisabled, movement]);
 
     return (
@@ -128,8 +128,8 @@ const OddsCell = React.memo(({ label, main, sub, isFavorite = false, isDisabled 
                 !isInteractive
                 ? 'bg-transparent border-transparent opacity-40 cursor-default'
                 : isFavorite
-                    ? 'bg-accent/8 border-accent/25 hover:bg-accent/14 hover:border-accent/40 shadow-glow-accent-sm hover:shadow-md cursor-pointer motion-safe:hover:scale-105 active:scale-100'
-                    : 'bg-surfaceHighlight/50 border-border/10 hover:border-border/30 hover:bg-surfaceHighlight/80 cursor-pointer motion-safe:hover:scale-105 active:scale-100 hover:shadow-sm',
+                    ? 'bg-accent/8 border-accent/25 hover:bg-accent/14 hover:border-accent/40 shadow-md hover:shadow-lg cursor-pointer motion-safe:hover:scale-105 active:scale-100'
+                    : 'bg-muted/50 border-border/10 hover:border-border/30 hover:bg-muted/80 cursor-pointer motion-safe:hover:scale-105 active:scale-100 hover:shadow-sm',
                 isInteractive && "focus-visible:ring-2 focus-visible:ring-accent focus-visible:z-10"
             )}
             style={isInteractive ? { willChange: 'transform' } : undefined}
@@ -141,14 +141,14 @@ const OddsCell = React.memo(({ label, main, sub, isFavorite = false, isDisabled 
 
             {movement !== 'none' && isInteractive && (
                 <div className="absolute left-1.5 top-1.5 z-10" aria-hidden="true">
-                    {movement === 'up' ? <ArrowUp size={11} className="text-success" strokeWidth={3} /> : <ArrowDown size={11} className="text-danger" strokeWidth={3} />}
+                    {movement === 'up' ? <ArrowUp size={11} className="text-success" strokeWidth={3} /> : <ArrowDown size={11} className="text-destructive" strokeWidth={3} />}
                 </div>
             )}
             <span className={cn("font-mono text-base font-bold tabular-nums tracking-tight z-10 transition-colors duration-300", mainColor)}>
                 {main}
             </span>
             {sub && (
-                <span className={cn("text-[10px] font-mono mt-1 tabular-nums z-10 transition-colors duration-300", isFavorite && isInteractive ? 'text-accent/70 group-hover/odds:text-accent' : 'text-textSecondary group-hover/odds:text-textPrimary')}>
+                <span className={cn("text-[10px] font-mono mt-1 tabular-nums z-10 transition-colors duration-300", isFavorite && isInteractive ? 'text-accent/70 group-hover/odds:text-accent' : 'text-muted-foreground group-hover/odds:text-foreground')}>
                     {sub}
                 </span>
             )}
@@ -166,12 +166,12 @@ const StatusBadge = React.memo(({ status, time }: StatusBadgeProps) => {
     switch (status) {
         case 'Live':
             return (
-                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-danger/15 border border-danger/30 shadow-md" role="status" aria-label="Game is live">
-                    <Activity size={12} className="text-danger motion-safe:animate-pulse" strokeWidth={3} />
-                    <span className="text-xs font-bold text-danger tracking-wider uppercase">Live</span>
+                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-destructive/15 border border-destructive/30 shadow-md" role="status" aria-label="Game is live">
+                    <Activity size={12} className="text-destructive motion-safe:animate-pulse" strokeWidth={3} />
+                    <span className="text-xs font-bold text-destructive tracking-wider uppercase">Live</span>
                 </div>
             );
-        case 'Final': return <span className="text-xs font-semibold text-textTertiary uppercase tracking-widest">Final</span>;
+        case 'Final': return <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Final</span>;
         case 'Postponed':
         case 'Canceled':
             return (
@@ -182,7 +182,7 @@ const StatusBadge = React.memo(({ status, time }: StatusBadgeProps) => {
             );
         default:
             return (
-                <div className="flex items-center gap-2 text-textSecondary hover:text-textPrimary transition-colors">
+                <div className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
                     <Clock size={14} />
                     <span className="text-sm font-medium font-mono tracking-tight">{time} ET</span>
                 </div>
@@ -294,7 +294,7 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
 
   return (
     <article
-        className="relative overflow-hidden mb-4 rounded-2xl border border-gray-200/50 dark:border-white/10 bg-noise group/card transition-all duration-500 ease-out hover:border-gray-300 dark:hover:border-white/20 shadow-glass hover:shadow-md backdrop-blur-sm bg-white dark:bg-black/60 motion-safe:hover:scale-[1.005]"
+        className="relative overflow-hidden mb-4 rounded-2xl border border-border/50 bg-noise group/card transition-all duration-500 ease-out hover:border-border shadow-lg hover:shadow-xl backdrop-blur-sm bg-card motion-safe:hover:scale-[1.005]"
         style={{ willChange: 'transform' }}
     >
       {/* Subtle gradient overlay on hover */}
@@ -310,14 +310,14 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
               <div className="flex items-center gap-4" role="gridcell">
                 <TeamLogo teamAbbr={awayTeam} teamName={awayTeamName} league={league} />
                 <div className="flex flex-col">
-                  <span className={cn("text-lg font-bold tracking-tight transition-colors duration-300", winner === 'home' ? 'text-textSecondary opacity-70' : 'text-textPrimary')}>
+                  <span className={cn("text-lg font-bold tracking-tight transition-colors duration-300", winner === 'home' ? 'text-muted-foreground opacity-70' : 'text-foreground')}>
                     {awayTeam}
                   </span>
-                  <span className="text-[10px] font-mono text-textTertiary tracking-wide">{awayRecord}</span>
+                  <span className="text-[10px] font-mono text-muted-foreground tracking-wide">{awayRecord}</span>
                 </div>
               </div>
               {showScores && (
-                <span className={cn("text-3xl font-mono font-bold tabular-nums transition-colors duration-300", winner === 'home' ? 'text-textTertiary opacity-50' : 'text-textPrimary')} role="gridcell">
+                <span className={cn("text-3xl font-mono font-bold tabular-nums transition-colors duration-300", winner === 'home' ? 'text-muted-foreground opacity-50' : 'text-foreground')} role="gridcell">
                   {scores.away}
                 </span>
               )}
@@ -327,14 +327,14 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
               <div className="flex items-center gap-4" role="gridcell">
                 <TeamLogo teamAbbr={homeTeam} teamName={homeTeamName} league={league} />
                 <div className="flex flex-col">
-                  <span className={cn("text-lg font-bold tracking-tight transition-colors duration-300", winner === 'away' ? 'text-textSecondary opacity-70' : 'text-textPrimary')}>
+                  <span className={cn("text-lg font-bold tracking-tight transition-colors duration-300", winner === 'away' ? 'text-muted-foreground opacity-70' : 'text-foreground')}>
                     {homeTeam}
                   </span>
-                  <span className="text-[10px] font-mono text-textTertiary tracking-wide">{homeRecord}</span>
+                  <span className="text-[10px] font-mono text-muted-foreground tracking-wide">{homeRecord}</span>
                 </div>
               </div>
               {showScores && (
-                <span className={cn("text-3xl font-mono font-bold tabular-nums transition-colors duration-300", winner === 'away' ? 'text-textTertiary opacity-50' : 'text-textPrimary')} role="gridcell">
+                <span className={cn("text-3xl font-mono font-bold tabular-nums transition-colors duration-300", winner === 'away' ? 'text-muted-foreground opacity-50' : 'text-foreground')} role="gridcell">
                   {scores.home}
                 </span>
               )}
@@ -348,7 +348,7 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
                 style={{ willChange: 'transform, opacity' }}
               >
                 <TrendingUp size={16} strokeWidth={2.5} className="text-accent" />
-                <span className="text-sm font-bold text-textPrimary">Analyze</span>
+                <span className="text-sm font-bold text-foreground">Analyze</span>
               </button>
             )}
             <button
@@ -360,12 +360,12 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
               {isGeneratingPick ? (
                 <>
                   <div className="w-4 h-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
-                  <span className="text-sm font-bold text-textPrimary">Generating...</span>
+                  <span className="text-sm font-bold text-foreground">Generating...</span>
                 </>
               ) : (
                 <>
                   <Sparkles size={16} strokeWidth={2.5} className="text-accent" />
-                  <span className="text-sm font-bold text-textPrimary">Get Pick</span>
+                  <span className="text-sm font-bold text-foreground">Get Pick</span>
                 </>
               )}
             </button>
