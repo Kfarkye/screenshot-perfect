@@ -133,4 +133,19 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Improve readability in chat messages */
+  .formatted-content {
+    @apply text-foreground;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .formatted-content p {
+    @apply mb-4;
+  }
+  
+  .formatted-content p:last-child {
+    @apply mb-0;
+  }
 }
