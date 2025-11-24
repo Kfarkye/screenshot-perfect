@@ -29,42 +29,42 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl bg-white dark:bg-black/90 border-gray-300 dark:border-white/20 backdrop-blur-xl">
+      <DialogContent className="max-w-2xl bg-card border-border backdrop-blur-xl">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+          <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
             Pick Analysis
           </DialogTitle>
         </DialogHeader>
 
         {gameInfo && (
-          <div className="text-sm text-gray-600 dark:text-gray-400 -mt-2 mb-4 font-mono">
+          <div className="text-sm text-muted-foreground -mt-2 mb-4 font-mono">
             {gameInfo.awayTeam} @ {gameInfo.homeTeam} • {gameInfo.time}
           </div>
         )}
 
         <div className="space-y-6">
           {/* Pick Header */}
-          <div className="flex items-end justify-between pb-6 border-b border-gray-200 dark:border-white/10">
+          <div className="flex items-end justify-between pb-6 border-b border-border">
             <div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wider font-semibold">
+              <div className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">
                 Recommended Pick
               </div>
-              <div className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white mb-1">
+              <div className="text-4xl font-bold tracking-tight text-foreground mb-1">
                 {pick.pick_side}
               </div>
-              <div className="text-lg text-gray-600 dark:text-gray-400 font-mono">
+              <div className="text-lg text-muted-foreground font-mono">
                 {pick.odds_at_generation > 0 ? '+' : ''}{pick.odds_at_generation}
               </div>
             </div>
             <div className="text-right">
-              <div className="text-xs text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wider font-semibold">
+              <div className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">
                 Confidence
               </div>
               <div className={cn(
                 "text-4xl font-bold tracking-tight",
                 isHigh ? "text-success" :
                 isMedium ? "text-warning" :
-                "text-gray-600 dark:text-gray-400"
+                "text-muted-foreground"
               )}>
                 {pick.confidence_score}%
               </div>
@@ -73,16 +73,16 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({
 
           {/* Reasoning */}
           <div>
-            <div className="text-xs text-gray-600 dark:text-gray-400 mb-3 uppercase tracking-wider font-semibold">
+            <div className="text-xs text-muted-foreground mb-3 uppercase tracking-wider font-semibold">
               Reasoning
             </div>
-            <div className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
+            <div className="text-sm text-foreground leading-relaxed">
               {pick.reasoning_text}
             </div>
           </div>
 
           {/* Timestamp */}
-          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-white/10">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-4 border-t border-border">
             <Clock size={12} strokeWidth={2} />
             <span>Generated {new Date(pick.created_at).toLocaleString()}</span>
           </div>

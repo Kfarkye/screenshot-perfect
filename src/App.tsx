@@ -182,12 +182,12 @@ const useReducedMotion = () => {
 
 const LoadingIndicator = React.memo(() => (
   <div className="flex justify-start w-full px-2 motion-safe:animate-fadeIn" role="status" aria-live="polite" aria-label="Analyzing Market Data">
-    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-gray-100/70 dark:bg-black/70 border border-gray-200/50 dark:border-white/10 backdrop-blur-sm shadow-sm">
+    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-muted/70 border border-border/50 backdrop-blur-sm shadow-sm">
       <div className="relative w-2 h-2 motion-reduce:hidden">
          <div className="absolute inset-0 w-full h-full rounded-full bg-accent opacity-30 animate-ping-slow"></div>
          <div className="absolute inset-0 w-full h-full rounded-full bg-accent"></div>
       </div>
-      <span className="text-xs text-gray-600 dark:text-gray-400 font-mono uppercase tracking-widest font-medium">
+      <span className="text-xs text-muted-foreground font-mono uppercase tracking-widest font-medium">
         Analyzing Market Data
       </span>
     </div>

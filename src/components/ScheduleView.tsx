@@ -110,7 +110,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
           <div className="absolute inset-0 w-10 h-10 border-3 border-transparent border-t-accent/50 rounded-full motion-safe:animate-ping"></div>
         </div>
         <div className="flex flex-col items-center gap-2">
-          <p className="text-xs text-textPrimary font-bold uppercase tracking-[0.15em] motion-safe:animate-pulse">Syncing {league} Odds</p>
+          <p className="text-xs text-foreground font-bold uppercase tracking-[0.15em] motion-safe:animate-pulse">Syncing {league} Odds</p>
           <div className="flex gap-1">
             <div className="w-1.5 h-1.5 bg-accent rounded-full motion-safe:animate-bounce" style={{ animationDelay: '0ms' }}></div>
             <div className="w-1.5 h-1.5 bg-accent rounded-full motion-safe:animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -124,16 +124,16 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8 motion-safe:animate-slide-up">
-        <div className="w-16 h-16 rounded-2xl bg-danger/10 flex items-center justify-center mb-5 border border-danger/20 shadow-lg backdrop-blur-sm">
-          <AlertCircle className="w-7 h-7 text-danger" strokeWidth={2.5} />
+        <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center mb-5 border border-destructive/20 shadow-lg backdrop-blur-sm">
+          <AlertCircle className="w-7 h-7 text-destructive" strokeWidth={2.5} />
         </div>
-        <h3 className="text-xl font-bold text-textPrimary mb-2.5 tracking-tight">Market Unavailable</h3>
-        <p className="text-sm text-textSecondary mb-7 max-w-xs mx-auto leading-relaxed">
+        <h3 className="text-xl font-bold text-foreground mb-2.5 tracking-tight">Market Unavailable</h3>
+        <p className="text-sm text-muted-foreground mb-7 max-w-xs mx-auto leading-relaxed">
           Could not retrieve the slate for this date. The market might be closed.
         </p>
         <button
           onClick={() => loadData(false)}
-          className="glass-button px-7 py-3 rounded-xl text-sm font-bold text-textPrimary flex items-center gap-2.5 shadow-md hover:shadow-xl motion-safe:hover:scale-105 active:scale-100 transition-all duration-300"
+          className="glass-button px-7 py-3 rounded-xl text-sm font-bold text-foreground flex items-center gap-2.5 shadow-md hover:shadow-xl motion-safe:hover:scale-105 active:scale-100 transition-all duration-300"
           style={{ willChange: 'transform' }}
         >
           <RefreshCw size={15} strokeWidth={2.5} />
@@ -155,32 +155,32 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
                   <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-success shadow-glow-accent-sm"></span>
                 </span>
-                <div className="flex flex-col">
-                  <h2 className="text-xs font-extrabold text-textSecondary tracking-[0.12em] uppercase">{league} Board</h2>
-                  <span className="text-[9px] text-textTertiary font-mono hidden md:block mt-0.5">
-                    Updated: {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                  </span>
-                </div>
+                 <div className="flex flex-col">
+                   <h2 className="text-xs font-extrabold text-muted-foreground tracking-[0.12em] uppercase">{league} Board</h2>
+                   <span className="text-[9px] text-muted-foreground/70 font-mono hidden md:block mt-0.5">
+                     Updated: {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                   </span>
+                 </div>
             </div>
 
             {/* Premium Date Navigator */}
-            <div className="flex items-center bg-gray-100/80 dark:bg-white/10 border border-gray-200/50 dark:border-white/15 rounded-full p-1 shadow-glass-inset backdrop-blur-sm">
+            <div className="flex items-center bg-muted/80 border border-border/50 rounded-full p-1 shadow-sm backdrop-blur-sm">
                 <button
                     onClick={() => changeDate(-1)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white dark:hover:bg-white/20 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all duration-300 motion-safe:hover:scale-110 active:scale-95"
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-card text-muted-foreground hover:text-foreground transition-all duration-300 motion-safe:hover:scale-110 active:scale-95"
                     aria-label="Previous Day"
                     style={{ willChange: 'transform' }}
                 >
                     <ChevronLeft size={16} strokeWidth={2.5} />
                 </button>
                 <div className="px-5 min-w-[110px] text-center">
-                    <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wide">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wide">
                         {formatDate(currentDate)}
                     </span>
                 </div>
                 <button
                     onClick={() => changeDate(1)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white dark:hover:bg-white/20 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all duration-300 motion-safe:hover:scale-110 active:scale-95"
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-card text-muted-foreground hover:text-foreground transition-all duration-300 motion-safe:hover:scale-110 active:scale-95"
                     aria-label="Next Day"
                     style={{ willChange: 'transform' }}
                 >
@@ -191,7 +191,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
           
           {/* Premium Bookmaker Selector */}
           <div className="flex justify-end px-1">
-            <div className="flex bg-gray-100/80 dark:bg-white/10 border border-gray-200/50 dark:border-white/15 rounded-xl p-1 shadow-glass-inset backdrop-blur-sm gap-1">
+            <div className="flex bg-muted/80 border border-border/50 rounded-xl p-1 shadow-sm backdrop-blur-sm gap-1">
               {books.map((book) => (
                  <button
                    key={book.id}
@@ -199,8 +199,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
                    className={cn(
                      "px-3 md:px-4 py-1.5 text-[10px] font-extrabold rounded-lg transition-all duration-500 uppercase tracking-wide",
                      selectedBook === book.id
-                       ? 'bg-white dark:bg-white/20 shadow-md text-accent border border-accent/20 motion-safe:scale-105'
-                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-white/10 motion-safe:hover:scale-105 active:scale-95'
+                       ? 'bg-card shadow-md text-accent border border-accent/20 motion-safe:scale-105'
+                       : 'text-muted-foreground hover:text-foreground hover:bg-card/50 motion-safe:hover:scale-105 active:scale-95'
                    )}
                    style={{ willChange: 'transform' }}
                  >
@@ -214,7 +214,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
       <div className="space-y-0">
         {games.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 opacity-50">
-             <Calendar className="w-8 h-8 mb-3 text-textTertiary" />
+             <Calendar className="w-8 h-8 mb-3 text-muted-foreground" />
              <p className="text-sm font-medium">No {league} games scheduled for {formatDate(currentDate)}.</p>
           </div>
         ) : (
@@ -225,7 +225,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
       </div>
       
       <div className="flex flex-col items-center mt-12 gap-2 opacity-50 hover:opacity-100 transition-opacity">
-        <span className="text-[9px] font-bold text-textTertiary uppercase tracking-widest">
+        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
            SharpEdge Analytics Engine
         </span>
         <div className="h-px w-12 bg-border/20"></div>

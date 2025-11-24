@@ -298,31 +298,31 @@ const renderInline = (
   // Dynamic theming based on context
   const getSegmentStyle = (type: ProcessedSegment['type']) => {
     const baseStyles = {
-      text: isError ? 'text-white/95' : 'text-gray-900 dark:text-gray-100',
-      bold: 'font-semibold text-gray-900 dark:text-white',
-      italic: 'italic text-gray-700 dark:text-gray-300',
+      text: isError ? 'text-destructive-foreground/95' : 'text-foreground',
+      bold: 'font-semibold text-foreground',
+      italic: 'italic text-muted-foreground',
       code: cn(
         'px-2 py-0.5 rounded-md text-[0.9em] font-mono border mx-0.5 align-baseline',
         isError
-          ? 'bg-white/20 border-white/30 text-white'
-          : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700'
+          ? 'bg-background/20 border-border/30 text-destructive-foreground'
+          : 'bg-muted text-foreground border-border'
       ),
       link: cn(
         'underline decoration-1 underline-offset-4 hover:decoration-2 transition-all font-medium',
-        isError ? 'text-white' : 'text-accent hover:text-accent/80'
+        isError ? 'text-destructive-foreground' : 'text-accent hover:text-accent/80'
       ),
-      record: 'inline-block text-[0.9em] font-medium mx-1 text-gray-700 dark:text-gray-300',
+      record: 'inline-block text-[0.9em] font-medium mx-1 text-muted-foreground',
       metric: cn(
         'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[0.85em] font-medium',
-        'bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100'
+        'bg-muted border border-border text-foreground'
       ),
       lane: cn(
         'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold tracking-wide uppercase',
         'bg-gradient-to-r',
-        role === 'architect' && 'from-purple-500/20 to-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/30',
-        role === 'database' && 'from-blue-500/20 to-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-500/30',
-        role === 'interface' && 'from-green-500/20 to-green-600/20 text-green-600 dark:text-green-400 border border-green-500/30',
-        role === 'test' && 'from-orange-500/20 to-orange-600/20 text-orange-600 dark:text-orange-400 border border-orange-500/30'
+        role === 'architect' && 'from-primary/20 to-primary/20 text-primary border border-primary/30',
+        role === 'database' && 'from-accent/20 to-accent/20 text-accent border border-accent/30',
+        role === 'interface' && 'from-success/20 to-success/20 text-success border border-success/30',
+        role === 'test' && 'from-warning/20 to-warning/20 text-warning border border-warning/30'
       )
     };
     
@@ -449,32 +449,32 @@ const CodeBlock = React.memo(({ language, code, metadata }: CodeBlockProps) => {
   const showLineNumbers = metadata?.lineNumbers ?? lines.length > 5;
   
   return (
-    <div className="my-6 rounded-2xl overflow-hidden border border-gray-200/80 dark:border-gray-800 bg-gray-50/50 dark:bg-[#0a0a0a] shadow-2xl backdrop-blur-sm">
+    <div className="my-6 rounded-2xl overflow-hidden border border-border bg-card shadow-2xl backdrop-blur-sm">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 bg-white/80 dark:bg-[#141414] border-b border-gray-200 dark:border-gray-800 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-5 py-3.5 bg-card-foreground/5 border-b border-border backdrop-blur-sm">
         <div className="flex items-center gap-4">
           <div className="flex gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500/90 shadow-sm" />
-            <div className="w-3 h-3 rounded-full bg-yellow-500/90 shadow-sm" />
-            <div className="w-3 h-3 rounded-full bg-green-500/90 shadow-sm" />
+            <div className="w-3 h-3 rounded-full bg-destructive/90 shadow-sm" />
+            <div className="w-3 h-3 rounded-full bg-warning/90 shadow-sm" />
+            <div className="w-3 h-3 rounded-full bg-success/90 shadow-sm" />
           </div>
           <div className="flex items-center gap-2.5">
-            <Terminal size={15} className="text-gray-500 dark:text-gray-400" />
-            <span className="text-xs font-mono text-gray-700 dark:text-gray-300 font-medium">{language}</span>
+            <Terminal size={15} className="text-muted-foreground" />
+            <span className="text-xs font-mono text-foreground font-medium">{language}</span>
             {metadata?.filename && (
               <>
-                <ChevronRight size={13} className="text-gray-400 dark:text-gray-600" />
-                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{metadata.filename}</span>
+                <ChevronRight size={13} className="text-muted-foreground" />
+                <span className="text-xs text-muted-foreground font-medium">{metadata.filename}</span>
               </>
             )}
           </div>
         </div>
         <button
           onClick={handleCopy}
-          className="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+          className="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-muted text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
         >
           {isCopied ? (
-            <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+            <span className="flex items-center gap-1.5 text-success">
               <Check size={14} />
               Copied
             </span>
@@ -491,13 +491,13 @@ const CodeBlock = React.memo(({ language, code, metadata }: CodeBlockProps) => {
       <div className="relative">
         <pre
           ref={codeRef}
-          className="p-5 overflow-x-auto font-mono text-[13px] leading-[1.7] bg-white dark:bg-[#0a0a0a]"
+          className="p-5 overflow-x-auto font-mono text-[13px] leading-[1.7] bg-card"
           style={{
             scrollbarWidth: 'thin',
             scrollbarColor: '#444 transparent'
           }}
         >
-          <code className="text-gray-900 dark:text-gray-100">
+          <code className="text-foreground">
             {showLineNumbers ? (
               <div className="flex">
                 <div className="select-none pr-5 text-gray-400 dark:text-gray-600 text-right min-w-[3em]">
