@@ -205,7 +205,9 @@ export const fetchSchedule = async (league: League = 'NHL', targetDate: Date = n
           sport: config.key, 
           regions: 'us', 
           markets: 'h2h,spreads,totals', 
-          bookmakers: 'draftkings,fanduel,betmgm,williamhill,williamhill_us,caesars'
+          bookmakers: 'draftkings,fanduel,betmgm,williamhill,williamhill_us,caesars',
+          dateFormat: 'iso',
+          daysFrom: 3  // Look ahead 3 days to catch Monday Night Football
         }
       }),
       fetchStandings(league)
@@ -237,9 +239,19 @@ export const fetchSchedule = async (league: League = 'NHL', targetDate: Date = n
     // 4. Filter & Map
     const combinedGames = Array.from(gameMap.values()).filter((game: any) => {
       const gameDate = new Date(game.commence_time);
-      return gameDate.getDate() === target.getDate() &&
-             gameDate.getMonth() === target.getMonth() &&
-             gameDate.getFullYear() === target.getFullYear();
+      const gameDateLocal = new Date(gameDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      
+      // For NFL, include games that start late (like Monday Night Football)
+      if (league === 'NFL') {
+        // Check if game is within 24 hours of target date
+        const timeDiff = Math.abs(gameDateLocal.getTime() - target.getTime());
+        const hoursDiff = timeDiff / (1000 * 60 * 60);
+        return hoursDiff < 24;
+      }
+      
+      return gameDateLocal.getDate() === target.getDate() &&
+             gameDateLocal.getMonth() === target.getMonth() &&
+             gameDateLocal.getFullYear() === target.getFullYear();
     });
 
     const mappedGames: GameData[] = combinedGames.map((game: any) => {
