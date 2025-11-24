@@ -264,7 +264,7 @@ export const InputArea = memo(forwardRef<InputAreaHandle, InputAreaProps>(({
   const transitionClasses = prefersReducedMotion ? 'transition-none' : 'transition-all duration-300 ease-in-out';
 
   const containerClasses = `
-    relative flex items-end gap-3 p-2.5 rounded-[32px] bg-surface/90 border shadow-glass backdrop-blur-2xl
+    relative flex items-end gap-3 p-2.5 rounded-[32px] bg-gray-100/80 dark:bg-black/60 border shadow-glass backdrop-blur-2xl
     ${transitionClasses}
     ${stateColorClasses}
     ${isDisabled
@@ -300,7 +300,7 @@ export const InputArea = memo(forwardRef<InputAreaHandle, InputAreaProps>(({
           rows={1}
           // Typography refinement: antialiased for crisp rendering (DraftKings-style clarity).
           // A11y Note: 'scrollbar-hide' is intentionally removed. Rely on native or globally styled scrollbars for better accessibility.
-          className="w-full bg-transparent text-textPrimary placeholder-textTertiary text-[16px] px-4 py-3.5 focus:outline-none resize-none overflow-y-auto font-sans leading-relaxed disabled:cursor-not-allowed antialiased"
+          className="w-full bg-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-[16px] px-4 py-3.5 focus:outline-none resize-none overflow-y-auto font-sans leading-relaxed disabled:cursor-not-allowed antialiased"
           style={{
             minHeight: `${MIN_TEXTAREA_HEIGHT}px`,
             maxHeight: `${MAX_TEXTAREA_HEIGHT}px`

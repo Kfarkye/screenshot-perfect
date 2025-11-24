@@ -182,12 +182,12 @@ const useReducedMotion = () => {
 
 const LoadingIndicator = React.memo(() => (
   <div className="flex justify-start w-full px-2 motion-safe:animate-fadeIn" role="status" aria-live="polite" aria-label="Analyzing Market Data">
-    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-surface/70 border border-border/10 backdrop-blur-sm shadow-sm">
+    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-gray-100/70 dark:bg-black/70 border border-gray-200/50 dark:border-white/10 backdrop-blur-sm shadow-sm">
       <div className="relative w-2 h-2 motion-reduce:hidden">
          <div className="absolute inset-0 w-full h-full rounded-full bg-accent opacity-30 animate-ping-slow"></div>
          <div className="absolute inset-0 w-full h-full rounded-full bg-accent"></div>
       </div>
-      <span className="text-xs text-textSecondary font-mono uppercase tracking-widest font-medium">
+      <span className="text-xs text-gray-600 dark:text-gray-400 font-mono uppercase tracking-widest font-medium">
         Analyzing Market Data
       </span>
     </div>
@@ -207,10 +207,10 @@ const OnboardingView = React.memo(({ onSuggestionClick, league }: OnboardingProp
     <div className="min-h-full flex flex-col items-center justify-center p-4 sm:p-6 text-center motion-safe:animate-slide-up-fade">
       <div className="max-w-lg w-full space-y-12">
         <div className="space-y-4">
-          <h1 className="text-5xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-textPrimary via-textSecondary/90 to-textPrimary">
+          <h1 className="text-5xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-gray-900 via-gray-600 to-gray-900 dark:from-white dark:via-gray-300 dark:to-white">
             Sharp<span className="text-accent">Edge</span>
           </h1>
-          <p className="text-textSecondary text-lg font-light max-w-md mx-auto leading-relaxed">
+          <p className="text-gray-600 dark:text-gray-400 text-lg font-light max-w-md mx-auto leading-relaxed">
             Institutional-grade {league} betting analysis. Powered by low-latency market data and advanced AI modeling.
           </p>
         </div>
@@ -224,23 +224,23 @@ const OnboardingView = React.memo(({ onSuggestionClick, league }: OnboardingProp
                   onSuggestionClick(s.query);
               }}
               className="group flex items-center justify-between p-5 rounded-xl text-left w-full transition-all duration-300 ease-out 
-                        bg-surface/30 border border-border/10 backdrop-blur-md shadow-sm
-                        hover:bg-surface/50 hover:border-accent/30 hover:shadow-md motion-safe:hover:scale-[1.01]
+                        bg-gray-100/50 dark:bg-white/5 border border-gray-200/50 dark:border-white/10 backdrop-blur-md shadow-sm
+                        hover:bg-gray-200/50 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-accent/30 hover:shadow-md motion-safe:hover:scale-[1.01]
                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               aria-label={`Start analysis: ${s.label}`}
               role="listitem"
             >
               <div className="flex items-center gap-5">
-                <div className="w-12 h-12 rounded-lg bg-surfaceHighlight/70 flex items-center justify-center text-textPrimary shadow-inner 
-                                group-hover:bg-accent group-hover:text-white transition-colors duration-300">
+                <div className="w-12 h-12 rounded-lg bg-gray-200 dark:bg-white/10 flex items-center justify-center text-gray-900 dark:text-white shadow-inner 
+                                group-hover:bg-accent group-hover:text-white dark:group-hover:text-black transition-colors duration-300">
                   <s.icon size={22} strokeWidth={2} aria-hidden="true" />
                 </div>
                 <div>
-                  <span className="block text-base font-semibold text-textPrimary">{s.label}</span>
-                  <span className="block text-sm text-textSecondary group-hover:text-textPrimary/90 transition-colors mt-1 leading-tight">{s.desc}</span>
+                  <span className="block text-base font-semibold text-gray-900 dark:text-white">{s.label}</span>
+                  <span className="block text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-800 dark:group-hover:text-gray-200 transition-colors mt-1 leading-tight">{s.desc}</span>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-textTertiary group-hover:text-accent transition-all duration-300 transform motion-safe:group-hover:translate-x-1 ease-out" aria-hidden="true" />
+              <ChevronRight size={18} className="text-gray-500 dark:text-gray-400 group-hover:text-accent transition-all duration-300 transform motion-safe:group-hover:translate-x-1 ease-out" aria-hidden="true" />
             </button>
           ))}
         </div>

@@ -164,23 +164,23 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
             </div>
 
             {/* Premium Date Navigator */}
-            <div className="flex items-center bg-surfaceHighlight/60 border border-border/15 rounded-full p-1 shadow-glass-inset backdrop-blur-sm">
+            <div className="flex items-center bg-gray-100/80 dark:bg-white/10 border border-gray-200/50 dark:border-white/15 rounded-full p-1 shadow-glass-inset backdrop-blur-sm">
                 <button
                     onClick={() => changeDate(-1)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface text-textTertiary hover:text-textPrimary transition-all duration-300 motion-safe:hover:scale-110 active:scale-95"
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white dark:hover:bg-white/20 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all duration-300 motion-safe:hover:scale-110 active:scale-95"
                     aria-label="Previous Day"
                     style={{ willChange: 'transform' }}
                 >
                     <ChevronLeft size={16} strokeWidth={2.5} />
                 </button>
                 <div className="px-5 min-w-[110px] text-center">
-                    <span className="text-xs font-bold text-textPrimary uppercase tracking-wide">
+                    <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wide">
                         {formatDate(currentDate)}
                     </span>
                 </div>
                 <button
                     onClick={() => changeDate(1)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface text-textTertiary hover:text-textPrimary transition-all duration-300 motion-safe:hover:scale-110 active:scale-95"
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white dark:hover:bg-white/20 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all duration-300 motion-safe:hover:scale-110 active:scale-95"
                     aria-label="Next Day"
                     style={{ willChange: 'transform' }}
                 >
@@ -191,7 +191,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
           
           {/* Premium Bookmaker Selector */}
           <div className="flex justify-end px-1">
-            <div className="flex bg-surfaceHighlight/60 border border-border/15 rounded-xl p-1 shadow-glass-inset backdrop-blur-sm gap-1">
+            <div className="flex bg-gray-100/80 dark:bg-white/10 border border-gray-200/50 dark:border-white/15 rounded-xl p-1 shadow-glass-inset backdrop-blur-sm gap-1">
               {books.map((book) => (
                  <button
                    key={book.id}
@@ -199,8 +199,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
                    className={cn(
                      "px-3 md:px-4 py-1.5 text-[10px] font-extrabold rounded-lg transition-all duration-500 uppercase tracking-wide",
                      selectedBook === book.id
-                       ? 'bg-surface shadow-md text-accent border border-accent/20 motion-safe:scale-105'
-                       : 'text-textTertiary hover:text-textPrimary hover:bg-surface/50 motion-safe:hover:scale-105 active:scale-95'
+                       ? 'bg-white dark:bg-white/20 shadow-md text-accent border border-accent/20 motion-safe:scale-105'
+                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-white/10 motion-safe:hover:scale-105 active:scale-95'
                    )}
                    style={{ willChange: 'transform' }}
                  >
