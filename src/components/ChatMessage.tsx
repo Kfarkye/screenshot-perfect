@@ -298,25 +298,25 @@ const renderInline = (
   // Dynamic theming based on context
   const getSegmentStyle = (type: ProcessedSegment['type']) => {
     const baseStyles = {
-      text: isError ? 'text-white/95' : isModel ? 'text-text-primary/95' : 'text-accent-foreground/95',
-      bold: 'font-semibold tracking-tight',
+      text: isError ? 'text-white/95' : isModel ? 'text-foreground' : 'text-foreground',
+      bold: 'font-semibold',
       italic: 'italic',
       code: cn(
-        'px-1.5 py-0.5 rounded text-[0.85em] font-mono border mx-px align-middle',
+        'px-2 py-0.5 rounded-md text-[0.9em] font-mono border mx-0.5 align-baseline',
         isError
           ? 'bg-white/20 border-white/30 text-white'
           : isModel
-          ? 'bg-surface-highlight/70 text-text-primary border-surface-border/50'
-          : 'bg-black/15 dark:bg-white/15 border-white/20 dark:border-black/20'
+          ? 'bg-muted text-foreground border-border'
+          : 'bg-muted text-foreground border-border'
       ),
       link: cn(
-        'underline decoration-1 underline-offset-2 hover:decoration-2 transition-all',
-        isError ? 'text-white' : isModel ? 'text-accent' : 'text-accent-foreground'
+        'underline decoration-1 underline-offset-4 hover:decoration-2 transition-all',
+        isError ? 'text-white' : 'text-accent hover:text-accent/80'
       ),
-      record: 'inline-block text-[0.85em] font-numeric font-medium mx-1 opacity-80',
+      record: 'inline-block text-[0.9em] font-medium mx-1',
       metric: cn(
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.8em] font-medium',
-        'bg-surface-highlight/50 border border-surface-border/30'
+        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[0.85em] font-medium',
+        'bg-muted border border-border'
       ),
       lane: cn(
         'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold tracking-wide uppercase',
@@ -746,7 +746,7 @@ const FormattedText = React.memo(({ text, role, isError, isStreaming }: Formatte
                 key={key}
                 className={cn(
                   isOrderedList ? 'list-decimal' : 'list-disc',
-                  'pl-5 space-y-2 my-3'
+                  'pl-6 space-y-2.5 my-4 text-[15px] leading-[1.7]'
                 )}
               >
                 {items.map((item, i) => (
@@ -777,7 +777,7 @@ const FormattedText = React.memo(({ text, role, isError, isStreaming }: Formatte
             return (
               <HeadingTag
                 key={key}
-                className={cn(sizeClass, 'font-bold tracking-tight')}
+                className={cn(sizeClass, 'font-bold tracking-tight leading-tight')}
               >
                 {renderInline(TextProcessor.process(content), { isModel, isError, role })}
               </HeadingTag>
@@ -816,7 +816,7 @@ const FormattedText = React.memo(({ text, role, isError, isStreaming }: Formatte
           
           // Default paragraph
           return (
-            <p key={key} className="text-base my-3 leading-relaxed">
+            <p key={key} className="text-[15px] my-4 leading-[1.8] whitespace-pre-wrap break-words">
               {renderInline(TextProcessor.process(trimmed), { isModel, isError, role })}
             </p>
           );
@@ -825,7 +825,7 @@ const FormattedText = React.memo(({ text, role, isError, isStreaming }: Formatte
     });
   }, [text, role, isError, isStreaming]);
   
-  return <div className="formatted-content">{content}</div>;
+  return <div className="formatted-content space-y-2 max-w-none">{content}</div>;
 });
 FormattedText.displayName = 'FormattedText';
 
