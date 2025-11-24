@@ -222,9 +222,9 @@ export const fetchSchedule = async (league: League = 'NHL', targetDate: Date = n
   // 2. Calculate Days From
   const today = new Date(); today.setHours(0,0,0,0);
   const target = new Date(targetDate); target.setHours(0,0,0,0);
-  const diffTime = Math.abs(target.getTime() - today.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  const daysFrom = target.getTime() < today.getTime() ? diffDays + 1 : 1;
+  const diffTime = target.getTime() - today.getTime();
+  const diffDays = Math.ceil(Math.abs(diffTime) / (1000 * 60 * 60 * 24));
+  const daysFrom = diffTime < 0 ? diffDays + 1 : Math.max(1, diffDays);
 
   try {
     const { supabase } = await import('@/integrations/supabase/client');
