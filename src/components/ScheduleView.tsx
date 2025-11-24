@@ -33,54 +33,37 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
       // Pass the selected currentDate to the fetcher
       const data = await fetchSchedule(league, currentDate);
       if (data) { 
-        // Set initial games without picks
-        setGames(data);
+        // Fetch pre-generated picks from database
+        const { supabase } = await import('@/integrations/supabase/client');
+        const gameIds = data.map(g => g.id);
         
-        // Auto-generate picks in batches to avoid overwhelming the API
-        const { generatePick } = await import('../services/pickGenerator');
-        
-        const gamesToProcess = data.filter(game => 
-          game.status !== 'Final' && 
-          game.status !== 'Canceled' && 
-          game.status !== 'Postponed' &&
-          !game.pick &&
-          (game.odds?.draftkings?.awayML !== '-' || game.odds?.generic?.awayML !== '-')
-        );
+        const { data: picks, error: picksError } = await supabase
+          .from('analysis_memory')
+          .select('game_id, pick_side, confidence_score, reasoning_text, odds_at_generation, created_at')
+          .in('game_id', gameIds)
+          .eq('market_type', 'moneyline');
 
-        // Process in batches of 3 with delays between batches
-        const BATCH_SIZE = 3;
-        const BATCH_DELAY = 2000; // 2 seconds between batches
-        
-        const allGames = [...data];
-        
-        for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
-          const batch = gamesToProcess.slice(i, i + BATCH_SIZE);
-          
-          const batchResults = await Promise.allSettled(
-            batch.map(game => generatePick(game, 'moneyline'))
-          );
-          
-          // Update games with results
-          batchResults.forEach((result, idx) => {
-            const game = batch[idx];
-            const gameIndex = allGames.findIndex(g => g.id === game.id);
-            
-            if (result.status === 'fulfilled') {
-              allGames[gameIndex] = { ...game, pick: result.value };
-            } else {
-              console.error(`Failed to generate pick for ${game.id}:`, result.reason);
-            }
-          });
-          
-          // Update UI after each batch
-          setGames([...allGames]);
-          
-          // Add delay between batches (except for the last batch)
-          if (i + BATCH_SIZE < gamesToProcess.length) {
-            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
-          }
+        if (picksError) {
+          console.error('[PICKS_FETCH_ERROR]', picksError);
         }
+
+        // Map picks to games
+        const pickMap = new Map((picks || []).map(p => [p.game_id, {
+          id: p.game_id,
+          pick_side: p.pick_side,
+          confidence_score: p.confidence_score,
+          reasoning_text: p.reasoning_text,
+          odds_at_generation: p.odds_at_generation,
+          created_at: p.created_at,
+          market_type: 'moneyline' as const,
+        }]));
+
+        const gamesWithPicks = data.map(game => ({
+          ...game,
+          pick: pickMap.get(game.id)
+        }));
         
+        setGames(gamesWithPicks);
         setLastUpdated(new Date());
       }
     } catch (e) {
