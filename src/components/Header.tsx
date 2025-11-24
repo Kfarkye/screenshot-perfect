@@ -116,7 +116,6 @@ export const Header = React.memo(({ theme, toggleTheme, activeLeague, onLeagueCh
           case 'NHL': return 'translate-x-0';
           case 'NFL': return 'translate-x-[calc(100%+4px)]';
           case 'NBA': return 'translate-x-[calc(200%+8px)]';
-          case 'Tennis': return 'translate-x-[calc(300%+12px)]';
           default: return 'translate-x-0';
       }
   };
@@ -168,19 +167,10 @@ export const Header = React.memo(({ theme, toggleTheme, activeLeague, onLeagueCh
                  >
                     NBA
                  </button>
-                 <button
-                    onClick={() => onLeagueChange('Tennis')}
-                    className={cn(
-                        "px-4 py-1.5 text-xs sm:text-sm font-bold rounded-full transition-all duration-300 relative z-10 tracking-wide uppercase",
-                        activeLeague === 'Tennis' ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-                    )}
-                 >
-                    Tennis
-                 </button>
                  {/* Sliding Indicator */}
                  <div
                     className={cn(
-                        "absolute top-1 bottom-1 w-[calc(25%-3px)] bg-background shadow-md rounded-full transition-all duration-300 ease-out z-0 border border-border",
+                        "absolute top-1 bottom-1 w-[calc(33.333%-2.67px)] bg-background shadow-md rounded-full transition-all duration-300 ease-out z-0 border border-border",
                         getSliderPosition()
                     )}
                  />

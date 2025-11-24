@@ -1,4 +1,4 @@
-export type League = 'NHL' | 'NFL' | 'NBA' | 'Tennis';
+export type League = 'NHL' | 'NFL' | 'NBA';
 
 export interface Message {
   id: string;
