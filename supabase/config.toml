@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.seed-nfl-schedule]
 verify_jwt = false
+
+[functions.generate-nfl-picks-cron]
+verify_jwt = false
