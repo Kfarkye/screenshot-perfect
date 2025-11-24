@@ -73,7 +73,7 @@ const LEAGUE_CONFIG = {
     }
   },
   Tennis: {
-    key: 'tennis_atp',
+    key: 'tennis_atp_french_open', // Using ATP French Open as default, can be updated based on current tournaments
     spreadTerm: 'Set Spread',
     sportName: 'Tennis',
     statContext: "| ATP Rank | Surface | H2H |",
