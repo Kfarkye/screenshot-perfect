@@ -1,4 +1,5 @@
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+// Note: Supabase imports and related functions (getDbGames) from the original code are removed 
+// as the strategy now relies on OddsAPI + ESPN aggregation.
 
 // --- Types & Interfaces ---
 interface Game {
@@ -8,23 +9,26 @@ interface Game {
   home_team: string;
   away_team: string;
   bookmakers?: any[];
+  scores?: { name: string, score: string }[];
+  completed?: boolean;
+  status?: string; // Added for ESPN enrichment (e.g., STATUS_IN_PROGRESS)
   [key: string]: any;
 }
 
 interface OddsApiParams {
   sport: string;
-  regions: string;
-  markets: string;
-  dateFormat: string;
+  regions?: string;
+  markets?: string;
+  dateFormat?: string;
   daysFrom?: number;
   bookmakers?: string;
 }
 
 // --- Configuration & Constants ---
 const CONFIG = {
-  TIMEOUT_MS: 4000, // Fail fast explicitly
-  CACHE_TTL: 60,    // Browser cache
-  SWR_TTL: 300,     // Stale-while-revalidate window
+  TIMEOUT_MS: 5000, // Timeout for external API requests
+  CACHE_TTL: 60,    // Edge cache (1 min for live data)
+  SWR_TTL: 300,     // Stale-while-revalidate window (5 mins)
 };
 
 const CORS_HEADERS = {
@@ -33,7 +37,19 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// --- Utility: Resilient Fetcher ---
+// Mapping OddsAPI sport keys to ESPN API identifiers (for scoreboard endpoint)
+const SPORT_MAPPING: Record<string, { espn_sport: string; espn_league: string }> = {
+    'americanfootball_nfl': { espn_sport: 'football', espn_league: 'nfl' },
+    'basketball_nba': { espn_sport: 'basketball', espn_league: 'nba' },
+    'icehockey_nhl': { espn_sport: 'hockey', espn_league: 'nhl' },
+    'baseball_mlb': { espn_sport: 'baseball', espn_league: 'mlb' },
+    'americanfootball_ncaaf': { espn_sport: 'football', espn_league: 'college-football' },
+    // Add other mappings as needed
+};
+
+// --- Utility Functions ---
+
+// 1. Resilient Fetcher
 async function fetchWithTimeout(url: string, options: RequestInit = {}, retries = 1) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
@@ -42,7 +58,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, retries 
     const res = await fetch(url, { ...options, signal: controller.signal });
     clearTimeout(id);
     
-    // Retry on 5xx server errors only
+    // Retry on 5xx server errors
     if (res.status >= 500 && retries > 0) {
       console.warn(`[Fetch Retry] ${res.status} for ${url}`);
       return fetchWithTimeout(url, options, retries - 1);
@@ -50,69 +66,184 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, retries 
     return res;
   } catch (error) {
     clearTimeout(id);
-    if (retries > 0) return fetchWithTimeout(url, options, retries - 1);
+    // Retry on AbortError (timeout) or TypeError (often network issues in Edge environments)
+    if (retries > 0 && ((error as Error).name === 'AbortError' || (error as Error).name === 'TypeError')) {
+        console.warn(`[Fetch Retry] Error ${(error as Error).name} for ${url}`);
+        return fetchWithTimeout(url, options, retries - 1);
+    }
     throw error;
   }
 }
 
-// --- Service Layer ---
-
-// 1. Database Service
-async function getDbGames(
-  supabase: SupabaseClient, 
-  sport: string, 
-  targetDate: string
-) {
-  const tableMap: Record<string, string> = {
-    'americanfootball_nfl': 'nfl_games',
-    'basketball_nba': 'nba_games',
-    'icehockey_nhl': 'nhl_games'
-  };
-
-  const tableName = tableMap[sport];
-  if (!tableName) return null;
-
-  const { data, error } = await supabase
-    .from(tableName)
-    .select('*')
-    .eq('game_date', targetDate)
-    .order('start_time', { ascending: true });
-
-  if (error) throw new Error(`DB Error: ${error.message}`);
-  return data || [];
+// 2. Team Name Normalization (Crucial for matching across different APIs)
+function normalizeTeamName(name: string): string {
+    if (!name) return '';
+    // Lowercase, remove punctuation/special characters, and trim whitespace.
+    return name.toLowerCase()
+               .replace(/[^a-z0-9\s]/g, '')
+               .replace(/\s+/g, ' ')
+               .trim();
 }
 
-// 2. External API Service
-async function getExternalOdds(apiKey: string, params: OddsApiParams) {
-  const query = new URLSearchParams({
-    apiKey,
-    regions: params.regions || 'us',
-    markets: params.markets || 'h2h,spreads,totals',
-    oddsFormat: 'american',
-    dateFormat: params.dateFormat || 'iso',
-  });
-
-  if (params.bookmakers) query.append('bookmakers', params.bookmakers);
-  if (params.daysFrom) query.append('daysFrom', params.daysFrom.toString());
-
-  const endpoint = (params.markets === 'h2h' && params.daysFrom) ? 'scores' : 'odds';
-  const url = `https://api.the-odds-api.com/v4/sports/${params.sport}/${endpoint}?${query}`;
-
-  try {
-    const res = await fetchWithTimeout(url);
+// 3. Game Key Generation (For merging OddsAPI and ESPN)
+function generateGameKey(game: Partial<Game>): string {
+    if (!game.commence_time || !game.home_team || !game.away_team) return '';
     
-    if (res.status === 422) {
-        console.warn('[Odds API] Market/Date unavailable (422)');
-        return []; 
+    // Key based on the date (YYYY-MM-DD) and normalized team names.
+    // We ignore exact time as it often differs between APIs.
+    const datePart = game.commence_time.substring(0, 10);
+    const home = normalizeTeamName(game.home_team);
+    const away = normalizeTeamName(game.away_team);
+
+    // Ensure consistent ordering (alphabetical) to handle potential home/away swaps between APIs
+    const teams = [home, away].sort();
+
+    return `${datePart}_${teams[0]}_vs_${teams[1]}`;
+}
+
+
+// --- Service Layer: OddsAPI ---
+
+// 1. Generalized OddsAPI Fetcher
+async function fetchOddsApi(apiKey: string, params: Record<string, any>, endpoint: 'odds' | 'scores') {
+    const query = new URLSearchParams({ apiKey, dateFormat: 'iso' });
+  
+    if (params.daysFrom) query.append('daysFrom', params.daysFrom.toString());
+  
+    // Endpoint-specific parameters
+    if (endpoint === 'odds') {
+      query.append('regions', params.regions || 'us');
+      query.append('markets', params.markets || 'h2h,spreads,totals');
+      query.append('oddsFormat', 'american');
+      if (params.bookmakers) query.append('bookmakers', params.bookmakers);
     }
-    if (!res.ok) throw new Error(`API Error ${res.status}`);
-    
-    return await res.json();
-  } catch (e) {
-    console.error('[Odds API] Fetch failed:', e);
-    return null; // Return null to signal fallback/failure without crashing
+  
+    const url = `https://api.the-odds-api.com/v4/sports/${params.sport}/${endpoint}?${query}`;
+  
+    try {
+      const res = await fetchWithTimeout(url);
+  
+      if (res.status === 422) {
+          // This often happens when asking for odds too far in the future or scores too far in the past
+          console.warn(`[OddsAPI ${endpoint}] Validation error (422). Likely date/market unavailable.`);
+          return [];
+      }
+      if (!res.ok) {
+        const usage = `Remaining: ${res.headers.get('x-requests-remaining')}`;
+        console.error(`[OddsAPI ${endpoint}] Error ${res.status} (${usage})`);
+        throw new Error(`API Error ${res.status} for ${endpoint}`);
+      }
+  
+      return await res.json();
+    } catch (e) {
+      console.error(`[OddsAPI ${endpoint}] Fetch failed:`, (e as Error).message);
+      return null; // Return null to signal failure without crashing the aggregation
+    }
   }
+
+// 2. Aggregated OddsAPI Service (Scores + Odds)
+async function getAggregatedOddsApiData(apiKey: string, params: OddsApiParams): Promise<Game[]> {
+    // Fetch both odds and scores in parallel
+    const [oddsResult, scoresResult] = await Promise.all([
+        fetchOddsApi(apiKey, params, 'odds'),
+        fetchOddsApi(apiKey, params, 'scores')
+    ]);
+
+    const odds = Array.isArray(oddsResult) ? oddsResult : [];
+    const scores = Array.isArray(scoresResult) ? scoresResult : [];
+
+    // Merge the data based on Game ID (which is consistent within OddsAPI)
+    const dataMap = new Map<string, Game>();
+
+    // 1. Start with odds data as it contains bookmakers
+    odds.forEach((game: any) => {
+        dataMap.set(game.id, game);
+    });
+
+    // 2. Merge scores into the map
+    scores.forEach((game: any) => {
+        if (dataMap.has(game.id)) {
+            const existing = dataMap.get(game.id)!;
+            // Merge scores/completed status from the 'scores' endpoint
+            existing.scores = game.scores;
+            existing.completed = game.completed;
+        } else {
+            // Game only found in scores (e.g., odds expired but game occurred)
+            dataMap.set(game.id, game);
+        }
+    });
+
+    return Array.from(dataMap.values());
 }
+
+// --- Service Layer: ESPN Fallback/Enrichment ---
+
+// 3. ESPN Schedule Service
+async function getEspnSchedule(sportKey: string, targetDate: string) {
+    const mapping = SPORT_MAPPING[sportKey];
+    if (!mapping) {
+      // Should be checked before calling, but provides a safe fallback
+      return null;
+    }
+  
+    // ESPN API expects date format YYYYMMDD
+    const dateParam = targetDate.replace(/-/g, '');
+    const url = `https://site.api.espn.com/apis/site/v2/sports/${mapping.espn_sport}/${mapping.espn_league}/scoreboard?dates=${dateParam}&limit=300`;
+  
+    try {
+      const res = await fetchWithTimeout(url);
+      if (!res.ok) throw new Error(`ESPN API Error ${res.status}`);
+      
+      const data = await res.json();
+      return data.events || [];
+    } catch (e) {
+      console.error('[ESPN API] Fetch failed:', (e as Error).message);
+      return null;
+    }
+}
+
+// 4. ESPN Normalization
+function normalizeEspnEvents(events: any[], sportKey: string): Game[] {
+    const games: Game[] = [];
+  
+    for (const event of events) {
+      const competition = event.competitions?.[0];
+      if (!competition) continue;
+  
+      const homeCompetitor = competition.competitors.find((c:any) => c.homeAway === 'home');
+      const awayCompetitor = competition.competitors.find((c:any) => c.homeAway === 'away');
+  
+      if (!homeCompetitor || !awayCompetitor) continue;
+
+      const homeTeamName = homeCompetitor.team.displayName;
+      const awayTeamName = awayCompetitor.team.displayName;
+  
+      // Normalize status and scores
+      const status = competition.status.type.name;
+      const completed = competition.status.type.completed;
+
+      // Extract scores only if the game has started or finished (ESPN status logic)
+      const scores = (status !== 'STATUS_SCHEDULED') ? [
+        { name: homeTeamName, score: homeCompetitor.score || '0' },
+        { name: awayTeamName, score: awayCompetitor.score || '0' }
+      ] : undefined;
+  
+      games.push({
+        id: `espn-${event.id}`, // Prefix ID to distinguish source
+        sport_key: sportKey,
+        commence_time: competition.date, // ISO 8601 format
+        home_team: homeTeamName,
+        away_team: awayTeamName,
+        bookmakers: [], // ESPN doesn't provide detailed odds here
+        scores: scores,
+        status: status,
+        completed: completed,
+        source: 'espn',
+      });
+    }
+    return games;
+}
+
 
 // --- Main Handler ---
 
@@ -120,85 +251,160 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS });
 
   try {
-    // 1. Setup
+    // 1. Setup and Validation
     const env = Deno.env.toObject();
-    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !env.ODDS_API_KEY) {
-      throw new Error('Missing configuration');
+    // Supabase keys are no longer strictly required, but ODDS_API_KEY is essential.
+    if (!env.ODDS_API_KEY) {
+      throw new Error('Missing ODDS_API_KEY configuration');
     }
 
-    const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
     const body = await req.json();
-    const { sport, targetDate } = body;
+    const { sport, targetDate, daysFrom } = body;
+
+    if (!sport) {
+        return new Response(JSON.stringify({ error: "Missing 'sport' parameter" }), {
+            status: 400,
+            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        });
+    }
+
+    // 2. Determine Interaction Mode and Parameters
+    
+    // Mode: Specific Date (user provided targetDate) vs Range (user provided daysFrom or nothing)
+    const isSpecificDateRequest = !!targetDate;
+    
+    // The primary date for ESPN calls and filtering. Defaults to today if no targetDate.
     const queryDate = targetDate || new Date().toISOString().split('T')[0];
 
-    console.log(`[Request] Sport: ${sport}, Date: ${queryDate}`);
+    // Prepare OddsAPI Params
+    let oddsApiDaysFrom = daysFrom ? parseInt(daysFrom) : undefined;
 
-    // 2. Parallel Execution Pattern
-    // We fire the DB request. If we intend to enrich, we COULD fire the API request 
-    // simultaneously to save time, rather than waiting for DB to finish.
-    // Here we check if the sport supports DB storage to decide strategy.
-    const supportsDb = ['americanfootball_nfl', 'basketball_nba'].includes(sport);
-    
-    let responseData: Game[] = [];
-
-    if (supportsDb) {
-      // Strategy: Fetch DB. If successful, fetch API to enrich (lazy load).
-      // To optimize speed, we assume we usually want live odds and fetch in parallel.
-      const [dbResult, apiResult] = await Promise.allSettled([
-        getDbGames(supabase, sport, queryDate),
-        getExternalOdds(env.ODDS_API_KEY, body)
-      ]);
-
-      const dbGames = dbResult.status === 'fulfilled' ? dbResult.value : null;
-      const liveOdds = apiResult.status === 'fulfilled' ? apiResult.value : null;
-
-      if (dbGames && dbGames.length > 0) {
-        // Transform DB Games
-        responseData = dbGames.map((g: any) => ({
-          id: g.game_id,
-          sport_key: sport,
-          sport_title: sport === 'americanfootball_nfl' ? 'NFL' : 'NBA',
-          commence_time: g.start_time,
-          home_team: g.home_team,
-          away_team: g.away_team,
-          bookmakers: [],
-          ...(g.game_data || {})
-        }));
-
-        // Enrich with Live Odds (O(1) lookup)
-        if (liveOdds && Array.isArray(liveOdds)) {
-          const oddsMap = new Map(liveOdds.map((g: any) => [g.id, g])); // Ensure external ID matches DB ID
-          responseData.forEach(game => {
-            // Note: This assumes DB 'game_id' matches Odds API 'id'. 
-            // If not, you need a fuzzy matcher here based on team names.
-            const live = oddsMap.get(game.id); 
-            if (live?.bookmakers) game.bookmakers = live.bookmakers;
-          });
-        }
-      } else {
-        // Fallback: DB empty/failed, use API result directly
-        console.log('[Fallback] Using raw API response');
-        responseData = Array.isArray(liveOdds) ? liveOdds : [];
-      }
-    } else {
-      // Direct API Strategy (NHL, etc)
-      const data = await getExternalOdds(env.ODDS_API_KEY, body);
-      responseData = Array.isArray(data) ? data : [];
+    // Strategy: If requesting a specific date, it's safer to NOT provide daysFrom to OddsAPI.
+    // We let OddsAPI return its default window and filter client-side.
+    // This avoids potential 422 errors if the targetDate is far away.
+    if (isSpecificDateRequest) {
+        oddsApiDaysFrom = undefined; 
+    } else if (!oddsApiDaysFrom) {
+        // If no timeframe specified (default behavior), request a small window (e.g., 1 day).
+        oddsApiDaysFrom = 1;
     }
 
-    // 3. Response with Edge Caching
+    const oddsApiParams: OddsApiParams = {
+        sport: sport,
+        regions: body.regions,
+        markets: body.markets,
+        bookmakers: body.bookmakers,
+        daysFrom: oddsApiDaysFrom,
+    };
+
+    console.log(`[Request] Sport: ${sport}, Mode: ${isSpecificDateRequest ? 'Specific Date ('+queryDate+')' : 'Range (daysFrom='+oddsApiDaysFrom+')'}`);
+
+    // Determine if ESPN should be called. We only call ESPN for the primary queryDate if the sport is mapped.
+    const shouldCallEspn = !!SPORT_MAPPING[sport];
+
+    // 3. Parallel Execution Pattern
+    // Fetch from OddsAPI (aggregated) and ESPN (if applicable) concurrently.
+    const [oddsResult, espnResult] = await Promise.allSettled([
+      getAggregatedOddsApiData(env.ODDS_API_KEY, oddsApiParams),
+      // For range requests, we only enrich/fallback the primary date (today) with ESPN.
+      // For specific date requests, we use that date for ESPN.
+      shouldCallEspn ? getEspnSchedule(sport, queryDate) : Promise.resolve(null)
+    ]);
+
+    // 4. Process and Normalize Results
+    let oddsGames: Game[] = [];
+    if (oddsResult.status === 'fulfilled' && Array.isArray(oddsResult.value)) {
+        oddsGames = oddsResult.value;
+        
+        // Client-side filter: ONLY if it was a specific date request.
+        if (isSpecificDateRequest) {
+            const initialCount = oddsGames.length;
+            oddsGames = oddsGames.filter(game => 
+                // Filter games starting on the queryDate (based on ISO timestamp)
+                game.commence_time.startsWith(queryDate)
+            );
+            console.log(`[OddsAPI Filtering] Filtered from ${initialCount} to ${oddsGames.length} games for ${queryDate}.`);
+        }
+    } else if (oddsResult.status === 'rejected') {
+        console.error("[OddsAPI] Promise rejected:", oddsResult.reason);
+    }
+
+    let espnGames: Game[] = [];
+    if (shouldCallEspn && espnResult.status === 'fulfilled' && Array.isArray(espnResult.value)) {
+        // ESPN results are already filtered by date via the API call
+        espnGames = normalizeEspnEvents(espnResult.value, sport);
+    } else if (shouldCallEspn && espnResult.status === 'rejected') {
+        console.error("[ESPN API] Promise rejected:", espnResult.reason);
+    }
+
+    // 5. Merging Strategy
+    // Goal: Prioritize OddsAPI data. Enrich with ESPN (scores/status). Append ESPN-only games (fallback).
+    
+    // Start with OddsAPI games as the base.
+    let responseData: Game[] = [...oddsGames];
+
+    if (espnGames.length > 0) {
+        if (responseData.length > 0) {
+            // Both returned data. Merge them.
+            
+            // Create a map for ESPN data using the robust key generator.
+            const espnMap = new Map<string, Game>();
+            espnGames.forEach(g => {
+                const key = generateGameKey(g);
+                if (key) espnMap.set(key, g);
+            });
+
+            // Enrich OddsAPI data and track matched ESPN games
+            responseData.forEach(game => {
+                const key = generateGameKey(game);
+                const espnMatch = espnMap.get(key);
+
+                if (espnMatch) {
+                    // Enrich with reliable status and scores from ESPN.
+                    // We prioritize ESPN for live status/scores as it's often faster/more reliable than OddsAPI scores endpoint.
+                    game.status = espnMatch.status;
+                    game.completed = espnMatch.completed;
+                    if (espnMatch.scores) {
+                        game.scores = espnMatch.scores;
+                    }
+                    game.espn_id = espnMatch.id;
+
+                    // Remove from the map so we know which ones are remaining (ESPN-only).
+                    espnMap.delete(key);
+                }
+            });
+
+            // Append remaining games from ESPN map (those not found in OddsAPI, e.g., too far in future)
+            if (espnMap.size > 0) {
+                console.log(`[Fallback] Appending ${espnMap.size} games from ESPN schedule (not found in OddsAPI).`);
+                espnMap.forEach(game => {
+                    responseData.push(game);
+                });
+            }
+        } else {
+            // OddsAPI is empty, use ESPN as the sole source
+            console.log('[Fallback] Using ESPN schedule as primary source (OddsAPI empty).');
+            responseData = espnGames;
+        }
+    }
+
+    // 6. Final Sorting
+    // Ensure the final list is sorted by commence time
+    responseData.sort((a, b) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime());
+
+    // 7. Response with Edge Caching
     return new Response(JSON.stringify(responseData), {
       headers: {
         ...CORS_HEADERS,
         'Content-Type': 'application/json',
-        // Critical for Speed: Cache in CDN for 60s, serve stale for up to 5 mins while updating
+        // Critical for Speed: Cache in CDN, serve stale while updating
         'Cache-Control': `public, s-maxage=${CONFIG.CACHE_TTL}, stale-while-revalidate=${CONFIG.SWR_TTL}`,
       },
     });
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Fatal] ${msg}`);
+    console.error(`[Fatal] ${msg}`, (error as Error).stack);
     
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
