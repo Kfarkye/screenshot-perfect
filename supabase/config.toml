@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.generate-nfl-picks-cron]
 verify_jwt = false
+
+[functions.fetch-nfl-stats]
+verify_jwt = false
