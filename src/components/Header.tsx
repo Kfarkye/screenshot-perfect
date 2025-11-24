@@ -31,29 +31,29 @@ interface StatusIndicatorProps {
 const StatusIndicator = React.memo(({ status, isOnline }: StatusIndicatorProps) => {
     if (!isOnline) {
         return (
-            <div className="flex items-center gap-3" role="status" aria-label="Network Status: Offline" aria-live="assertive">
+            <div className="flex items-center gap-2.5" role="status" aria-label="Network Status: Offline" aria-live="assertive">
                 <WifiOff size={16} className="text-warning" />
                 <span className="text-xs font-semibold text-warning tracking-wider uppercase hidden md:inline">Offline</span>
             </div>
         );
     }
     const config = useMemo(() => {
-        let indicatorColor = 'bg-textTertiary';
-        let textColor = 'text-textSecondary';
+        let indicatorColor = 'bg-muted-foreground';
+        let textColor = 'text-muted-foreground';
         let label = 'Market Closed';
         let Icon: React.ElementType | null = null;
         let animate = false;
         switch (status) {
-            case 'Live': indicatorColor = 'bg-success'; textColor = 'text-success'; label = 'Market Live'; animate = true; break;
-            case 'Error': indicatorColor = 'bg-danger'; textColor = 'text-danger'; label = 'Feed Error'; Icon = AlertTriangle; break;
-            case 'Delayed': indicatorColor = 'bg-warning'; textColor = 'text-warning'; label = 'Data Delayed'; Icon = Clock; break;
+            case 'Live': indicatorColor = 'bg-green-500'; textColor = 'text-green-500'; label = 'Market Live'; animate = true; break;
+            case 'Error': indicatorColor = 'bg-red-500'; textColor = 'text-red-500'; label = 'Feed Error'; Icon = AlertTriangle; break;
+            case 'Delayed': indicatorColor = 'bg-yellow-500'; textColor = 'text-yellow-500'; label = 'Data Delayed'; Icon = Clock; break;
             case 'Connecting': indicatorColor = 'bg-accent'; textColor = 'text-accent'; label = 'Connecting'; animate = true; break;
         }
         return { indicatorColor, textColor, label, Icon, animate };
     }, [status]);
 
     return (
-        <div className="flex items-center gap-3 group cursor-default" role="status">
+        <div className="flex items-center gap-2.5 group cursor-default" role="status">
             {config.Icon ? (
                 <config.Icon size={16} className={cn(config.textColor, "group-hover:opacity-80 transition-opacity")} />
             ) : (
@@ -62,7 +62,7 @@ const StatusIndicator = React.memo(({ status, isOnline }: StatusIndicatorProps) 
                     <span className={cn("relative inline-flex rounded-full h-2.5 w-2.5", config.indicatorColor)}></span>
                 </span>
             )}
-            <span className={cn("text-xs font-semibold tracking-wider uppercase hidden md:inline transition-colors", status !== 'Closed' ? config.textColor : 'text-textSecondary', "group-hover:text-textPrimary")}>
+            <span className={cn("text-xs font-semibold tracking-wider uppercase hidden md:inline transition-colors", config.textColor, "group-hover:text-foreground")}>
                 {config.label}
             </span>
         </div>
@@ -80,15 +80,17 @@ const ThemeToggleButton = React.memo(({ theme, toggleTheme }: ThemeToggleProps) 
     return (
         <button
             onClick={toggleTheme}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-transparent hover:bg-surfaceHighlight/80 text-textSecondary hover:text-textPrimary transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-110 active:scale-95 border border-transparent hover:border-border/20"
+            className="w-10 h-10 flex items-center justify-center rounded-lg bg-transparent hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-95 border border-transparent hover:border-border"
             role="switch"
             aria-checked={isDark}
             aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            style={{ willChange: 'transform' }}
         >
-            <div className="relative w-5 h-5 overflow-hidden">
-                <Sun size={18} strokeWidth={2.5} className={cn("absolute inset-0 transition-all duration-700 ease-out", isDark ? "opacity-100 motion-safe:rotate-0 motion-safe:scale-100" : "opacity-0 motion-safe:rotate-180 motion-safe:scale-0")} aria-hidden={!isDark} />
-                <Moon size={18} strokeWidth={2.5} className={cn("absolute inset-0 transition-all duration-700 ease-out", isDark ? "opacity-0 motion-safe:-rotate-180 motion-safe:scale-0" : "opacity-100 motion-safe:rotate-0 motion-safe:scale-100")} aria-hidden={isDark} />
+            <div className="relative w-5 h-5">
+                {isDark ? (
+                    <Sun size={18} strokeWidth={2.5} className="text-foreground" />
+                ) : (
+                    <Moon size={18} strokeWidth={2.5} className="text-foreground" />
+                )}
             </div>
         </button>
     );
@@ -119,25 +121,30 @@ export const Header = React.memo(({ theme, toggleTheme, activeLeague, onLeagueCh
   };
 
   return (
-    <header className={cn("flex-shrink-0 z-50 sticky top-0 transition-all duration-500 ease-out", isScrolled ? 'bg-surface/70 backdrop-blur-2xl shadow-glass border-b border-border/20' : 'bg-transparent border-b border-transparent')}>
+    <header className={cn(
+      "flex-shrink-0 z-50 sticky top-0 transition-all duration-300",
+      isScrolled 
+        ? 'bg-background/95 backdrop-blur-xl border-b border-border shadow-sm' 
+        : 'bg-background/80 backdrop-blur-md border-b border-border/50'
+    )}>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         
         <div className="flex items-center gap-3 sm:gap-6">
             <a href="/" className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:rounded-md p-1 -m-1">
             <div className="flex flex-col justify-center h-full">
-                <h1 className="text-xl font-extrabold tracking-tighter text-textPrimary leading-none">
+                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tighter text-foreground leading-none">
                     Sharp<span className="text-accent">Edge</span>
                 </h1>
             </div>
             </a>
             
-            {/* League Toggle Pill - Premium Vercel-style */}
-            <div className="flex bg-surfaceHighlight/60 border border-border/15 rounded-full p-1 relative shadow-glass-inset backdrop-blur-sm">
+            {/* League Toggle Pill */}
+            <div className="flex bg-muted/80 border border-border rounded-full p-1 relative shadow-sm">
                  <button
                     onClick={() => onLeagueChange('NHL')}
                     className={cn(
-                        "px-4 py-1.5 text-[11px] font-extrabold rounded-full transition-all duration-500 relative z-10 tracking-wide",
-                        activeLeague === 'NHL' ? "text-textPrimary" : "text-textTertiary hover:text-textSecondary"
+                        "px-4 py-1.5 text-xs sm:text-sm font-bold rounded-full transition-all duration-300 relative z-10 tracking-wide uppercase",
+                        activeLeague === 'NHL' ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                     )}
                  >
                     NHL
@@ -145,8 +152,8 @@ export const Header = React.memo(({ theme, toggleTheme, activeLeague, onLeagueCh
                  <button
                     onClick={() => onLeagueChange('NFL')}
                     className={cn(
-                        "px-4 py-1.5 text-[11px] font-extrabold rounded-full transition-all duration-500 relative z-10 tracking-wide",
-                        activeLeague === 'NFL' ? "text-textPrimary" : "text-textTertiary hover:text-textSecondary"
+                        "px-4 py-1.5 text-xs sm:text-sm font-bold rounded-full transition-all duration-300 relative z-10 tracking-wide uppercase",
+                        activeLeague === 'NFL' ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                     )}
                  >
                     NFL
@@ -154,16 +161,16 @@ export const Header = React.memo(({ theme, toggleTheme, activeLeague, onLeagueCh
                  <button
                     onClick={() => onLeagueChange('NBA')}
                     className={cn(
-                        "px-4 py-1.5 text-[11px] font-extrabold rounded-full transition-all duration-500 relative z-10 tracking-wide",
-                        activeLeague === 'NBA' ? "text-textPrimary" : "text-textTertiary hover:text-textSecondary"
+                        "px-4 py-1.5 text-xs sm:text-sm font-bold rounded-full transition-all duration-300 relative z-10 tracking-wide uppercase",
+                        activeLeague === 'NBA' ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                     )}
                  >
                     NBA
                  </button>
-                 {/* Sliding Indicator with shadow */}
+                 {/* Sliding Indicator */}
                  <div
                     className={cn(
-                        "absolute top-1 bottom-1 w-[calc(33.33%-4px)] bg-surface shadow-md rounded-full transition-all duration-500 ease-out z-0 border border-border/10",
+                        "absolute top-1 bottom-1 w-[calc(33.33%-4px)] bg-background shadow-md rounded-full transition-all duration-300 ease-out z-0 border border-border",
                         getSliderPosition()
                     )}
                  />
@@ -174,16 +181,16 @@ export const Header = React.memo(({ theme, toggleTheme, activeLeague, onLeagueCh
            <StatusIndicator status={marketStatus} isOnline={isOnline} />
            {onSignOut && (
              <>
-               <div className="w-px h-6 bg-border/20" aria-hidden="true"></div>
+               <div className="w-px h-6 bg-border hidden sm:block" aria-hidden="true"></div>
                <button
                  onClick={onSignOut}
-                 className="text-xs font-medium text-textSecondary hover:text-textPrimary transition-colors px-3 py-1.5 rounded-lg hover:bg-surfaceHighlight/50"
+                 className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-muted"
                >
                  Sign Out
                </button>
              </>
            )}
-           <div className="w-px h-6 bg-border/20 hidden sm:block" aria-hidden="true"></div>
+           <div className="w-px h-6 bg-border hidden sm:block" aria-hidden="true"></div>
            <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} />
         </nav>
       </div>
