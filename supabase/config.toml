@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.fetch-odds]
 verify_jwt = true
+
+[functions.fetch-standings]
+verify_jwt = true
