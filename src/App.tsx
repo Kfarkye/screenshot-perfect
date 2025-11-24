@@ -86,8 +86,8 @@ const ScheduleView = lazy(() =>
       return { default: () => (
         <div className="flex flex-col items-center justify-center h-full text-center p-8" role="alert">
             <AlertTriangle className="text-red-500 w-12 h-12 mb-4" />
-            <h3 className="text-xl font-semibold text-textPrimary">Failed to load the board.</h3>
-            <p className="text-textSecondary mt-2">We couldn't load the live data. Please check your connection and refresh.</p>
+            <h3 className="text-xl font-semibold text-foreground">Failed to load the board.</h3>
+            <p className="text-muted-foreground mt-2">We couldn't load the live data. Please check your connection and refresh.</p>
             <button
                 onClick={() => window.location.reload()}
                 className="mt-4 px-4 py-2 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -463,7 +463,7 @@ const App: React.FC = () => {
   return (
     <AppErrorBoundary>
         <div 
-            className="flex flex-col h-screen supports-[height:100dvh]:h-[100dvh] font-sans text-textPrimary antialiased overflow-hidden selection:bg-accent/50 selection:text-white transition-colors duration-500 bg-background bg-noise"
+            className="flex flex-col h-screen supports-[height:100dvh]:h-[100dvh] font-sans antialiased overflow-hidden selection:bg-accent/50 selection:text-white transition-colors duration-500 bg-background text-foreground"
             aria-label="SharpEdge Sports Betting Analysis Platform"
         >
         {!isOnline && (
@@ -632,10 +632,10 @@ class AppErrorBoundary extends Component<{ children: React.ReactNode }, { hasErr
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-screen bg-background text-textPrimary p-8 antialiased bg-noise" role="alert">
+        <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground p-8 antialiased" role="alert">
           <AlertTriangle className="w-16 h-16 text-red-500 mb-6" />
           <h1 className="text-3xl font-bold mb-4">A Critical Error Occurred</h1>
-          <p className="text-textSecondary mb-6 text-center">We apologize for the inconvenience.</p>
+          <p className="text-muted-foreground mb-6 text-center">We apologize for the inconvenience.</p>
           <button onClick={() => window.location.reload()} className="px-6 py-2 bg-accent text-white rounded-lg font-semibold hover:bg-accent/90 transition-colors">Refresh Application</button>
         </div>
       );
