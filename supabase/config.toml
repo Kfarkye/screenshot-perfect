@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.fetch-nfl-stats]
 verify_jwt = false
+
+[functions.update-nfl-team-stats]
+verify_jwt = false
