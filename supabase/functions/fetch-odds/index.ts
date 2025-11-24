@@ -319,11 +319,19 @@ Deno.serve(async (req) => {
         // Client-side filter: ONLY if it was a specific date request.
         if (isSpecificDateRequest) {
             const initialCount = oddsGames.length;
-            oddsGames = oddsGames.filter(game => 
-                // Filter games starting on the queryDate (based on ISO timestamp)
-                game.commence_time.startsWith(queryDate)
-            );
-            console.log(`[OddsAPI Filtering] Filtered from ${initialCount} to ${oddsGames.length} games for ${queryDate}.`);
+            
+            // Create date boundaries to account for late-night games (e.g., Monday Night Football)
+            // Include games that start from 6 AM on target day through 5:59 AM next day
+            const targetStart = new Date(queryDate + 'T06:00:00Z');
+            const targetEnd = new Date(queryDate + 'T06:00:00Z');
+            targetEnd.setDate(targetEnd.getDate() + 1);
+            
+            oddsGames = oddsGames.filter(game => {
+                const gameTime = new Date(game.commence_time);
+                return gameTime >= targetStart && gameTime < targetEnd;
+            });
+            
+            console.log(`[OddsAPI Filtering] Filtered from ${initialCount} to ${oddsGames.length} games for ${queryDate} (${targetStart.toISOString()} to ${targetEnd.toISOString()}).`);
         }
     } else if (oddsResult.status === 'rejected') {
         console.error("[OddsAPI] Promise rejected:", oddsResult.reason);
