@@ -532,11 +532,26 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
         <div className="relative bg-surface-secondary/30 p-6 md:w-[380px] flex flex-col justify-center border-t md:border-t-0 md:border-l border-glass-border">
           {/* Locked Board Overlay */}
           {boardLocked && (
-            <div className="absolute inset-0 bg-surface-primary/50 backdrop-blur-sm z-20 flex items-center justify-center flex-col gap-3">
-              <Lock size={24} className="text-content-secondary" />
-              <p className="text-body-sm font-semibold text-content-secondary">
-                {isConcluded ? "Markets Closed" : "Market Data Unavailable"}
-              </p>
+            <div className="absolute inset-0 bg-surface-primary/50 backdrop-blur-sm z-20 flex items-center justify-center flex-col gap-3 px-6">
+              <Lock size={20} className="text-content-secondary" />
+              {isConcluded ? (
+                <div className="text-center space-y-1">
+                  <p className="text-caption-1 font-bold text-accent uppercase tracking-wider">Final Score</p>
+                  <p className="text-body font-semibold text-content-primary">
+                    {awayTeam} {scores.away} - {homeTeam} {scores.home}
+                  </p>
+                  {winner && winner !== "tie" && (
+                    <p className="text-caption-2 text-content-secondary">
+                      {winner === "away" ? awayTeam : homeTeam} covered{" "}
+                      {processedOdds?.awayPL.line !== "-" 
+                        ? `the ${winner === "away" ? processedOdds.awayPL.line : processedOdds.homePL.line} spread`
+                        : ""}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-body-sm font-semibold text-content-secondary">Market Data Unavailable</p>
+              )}
             </div>
           )}
 
