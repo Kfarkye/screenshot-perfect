@@ -1603,6 +1603,60 @@ export type Database = {
         }
         Relationships: []
       }
+      nfl_games: {
+        Row: {
+          away_score: number | null
+          away_team: string
+          created_at: string | null
+          game_data: Json | null
+          game_date: string
+          game_id: string
+          home_score: number | null
+          home_team: string
+          id: string
+          season: string
+          start_time: string
+          status: string
+          updated_at: string | null
+          venue: string | null
+          week: number
+        }
+        Insert: {
+          away_score?: number | null
+          away_team: string
+          created_at?: string | null
+          game_data?: Json | null
+          game_date: string
+          game_id: string
+          home_score?: number | null
+          home_team: string
+          id?: string
+          season: string
+          start_time: string
+          status?: string
+          updated_at?: string | null
+          venue?: string | null
+          week: number
+        }
+        Update: {
+          away_score?: number | null
+          away_team?: string
+          created_at?: string | null
+          game_data?: Json | null
+          game_date?: string
+          game_id?: string
+          home_score?: number | null
+          home_team?: string
+          id?: string
+          season?: string
+          start_time?: string
+          status?: string
+          updated_at?: string | null
+          venue?: string | null
+          week?: number
+        }
+        Relationships: []
+      }
       organization_usage: {
         Row: {
           alert_threshold_80: boolean | null
