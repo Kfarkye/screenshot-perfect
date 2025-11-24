@@ -33,7 +33,32 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
       // Pass the selected currentDate to the fetcher
       const data = await fetchSchedule(league, currentDate);
       if (data) { 
-        setGames(data);
+        // Auto-generate picks for games without picks
+        const { generatePick } = await import('../services/pickGenerator');
+        const gamesWithPicks = await Promise.all(
+          data.map(async (game) => {
+            // Skip if game is concluded or already has a pick
+            if (game.status === 'Final' || game.status === 'Canceled' || game.status === 'Postponed' || game.pick) {
+              return game;
+            }
+            
+            // Skip if no odds available
+            const hasOdds = game.odds?.draftkings?.awayML !== '-' || game.odds?.generic?.awayML !== '-';
+            if (!hasOdds) {
+              return game;
+            }
+
+            try {
+              const pick = await generatePick(game, 'moneyline');
+              return { ...game, pick, isLoadingPick: false };
+            } catch (error) {
+              console.error(`Failed to generate pick for ${game.id}:`, error);
+              return game;
+            }
+          })
+        );
+        
+        setGames(gamesWithPicks);
         setLastUpdated(new Date());
       }
     } catch (e) {
