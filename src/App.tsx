@@ -479,7 +479,7 @@ const App: React.FC = () => {
                 role="tablist" 
                 aria-label="Application Views"
                 onKeyDown={handleTabKeyDown}
-                className="flex p-1.5 bg-black/60 dark:bg-black/60 border border-white/10 backdrop-blur-xl rounded-xl max-w-sm mx-auto shadow-2xl relative"
+                className="flex p-1.5 bg-gray-100/80 dark:bg-black/60 border border-gray-200/50 dark:border-white/10 backdrop-blur-xl rounded-xl max-w-sm mx-auto shadow-2xl relative"
             >
                 {TABS.map((tab) => (
                 <button
@@ -494,15 +494,15 @@ const App: React.FC = () => {
                     className={cn(
                     "flex-1 flex items-center justify-center gap-2.5 py-3 rounded-lg text-[15px] font-extrabold transition-all duration-300 ease-cubic-bezier relative z-10",
                     activeTab === tab.id
-                        ? "text-white dark:text-white"
-                        : "text-gray-400 dark:text-gray-400 hover:text-white dark:hover:text-white focus-visible:text-white",
+                        ? "text-gray-900 dark:text-white"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white focus-visible:text-gray-900 dark:focus-visible:text-white",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:z-20"
                     )}
                 >
                     <tab.icon size={18} strokeWidth={2.5} aria-hidden="true" />
                     <span className="tracking-wide">{tab.label}</span>
                     {activeTab === tab.id && (
-                        <div className="absolute inset-0 bg-white/10 dark:bg-white/10 border border-white/20 dark:border-white/20 shadow-lg backdrop-blur-sm rounded-lg -z-10 motion-safe:animate-scale-in" aria-hidden="true" />
+                        <div className="absolute inset-0 bg-white dark:bg-white/10 border border-gray-300 dark:border-white/20 shadow-lg backdrop-blur-sm rounded-lg -z-10 motion-safe:animate-scale-in" aria-hidden="true" />
                     )}
                 </button>
                 ))}
