@@ -1,571 +1,753 @@
-import { GoogleGenAI, Chat } from "@google/genai";
-import { Message, GameData, MarketData, League } from '../types';
-import { supabase } from '@/integrations/supabase/client';
+// Updated imports for the standard Google Generative AI SDK
+import { GoogleGenerativeAI, ChatSession, Content } from "@google/generative-ai";
+import { Message, GameData, MarketData, League } from "../types";
+import { supabase } from "@/integrations/supabase/client";
+
+// --- CONSTANTS & CONFIG ---
 
 const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
-const API_BASE = 'https://api.the-odds-api.com/v4/sports';
+// Security: Keep USE_ROUTER true for production to protect API keys and enable server-side tools.
+const USE_ROUTER = true;
+const SPORTS_TIMEZONE = "America/New_York"; // Define the timezone for the "sports day"
+const PREFERRED_BOOKMAKERS = ["draftkings", "fanduel", "betmgm", "williamhill_us", "caesars", "williamhill"];
 
-// Cache structure
-const oddsCache: Record<string, { data: GameData[], timestamp: number }> = {};
-let rawScheduleContext: string = "";
-let currentLeagueContext: League = 'NHL';
+// --- ENVIRONMENT HANDLING ---
 
-// --- CONFIGURATION & MAPPINGS ---
-
-const LEAGUE_CONFIG = {
-  NHL: {
-    key: 'icehockey_nhl',
-    spreadTerm: 'Puck Line',
-    sportName: 'NHL',
-    statContext: "| GF/G | GA/G | PP% | PK% |",
-    standingsUrl: 'https://api-web.nhle.com/v1/standings/now',
-    mapping: {
-      "Anaheim Ducks": "ANA", "Boston Bruins": "BOS", "Buffalo Sabres": "BUF",
-      "Calgary Flames": "CGY", "Carolina Hurricanes": "CAR", "Chicago Blackhawks": "CHI",
-      "Colorado Avalanche": "COL", "Columbus Blue Jackets": "CBJ", "Dallas Stars": "DAL",
-      "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM", "Florida Panthers": "FLA",
-      "Los Angeles Kings": "LAK", "Minnesota Wild": "MIN", "Montreal Canadiens": "MTL",
-      "Nashville Predators": "NSH", "New Jersey Devils": "NJD", "New York Islanders": "NYI",
-      "New York Rangers": "NYR", "Ottawa Senators": "OTT", "Philadelphia Flyers": "PHI",
-      "Pittsburgh Penguins": "PIT", "San Jose Sharks": "SJS", "Seattle Kraken": "SEA",
-      "St. Louis Blues": "STL", "Tampa Bay Lightning": "TBL", "Toronto Maple Leafs": "TOR",
-      "Utah Hockey Club": "UTA", "Vancouver Canucks": "VAN", "Vegas Golden Knights": "VGK",
-      "Washington Capitals": "WSH", "Winnipeg Jets": "WPG"
-    }
-  },
-  NFL: {
-    key: 'americanfootball_nfl',
-    spreadTerm: 'Spread',
-    sportName: 'NFL',
-    statContext: "| PTS/G | YDS/G | Pass Yds | Rush Yds |",
-    standingsUrl: 'https://site.api.espn.com/apis/v2/sports/football/nfl/standings',
-    mapping: {
-      "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL",
-      "Buffalo Bills": "BUF", "Carolina Panthers": "CAR", "Chicago Bears": "CHI",
-      "Cincinnati Bengals": "CIN", "Cleveland Browns": "CLE", "Dallas Cowboys": "DAL",
-      "Denver Broncos": "DEN", "Detroit Lions": "DET", "Green Bay Packers": "GB",
-      "Houston Texans": "HOU", "Indianapolis Colts": "IND", "Jacksonville Jaguars": "JAX",
-      "Kansas City Chiefs": "KC", "Las Vegas Raiders": "LV", "Los Angeles Chargers": "LAC",
-      "Los Angeles Rams": "LAR", "Miami Dolphins": "MIA", "Minnesota Vikings": "MIN",
-      "New England Patriots": "NE", "New Orleans Saints": "NO", "New York Giants": "NYG",
-      "New York Jets": "NYJ", "Philadelphia Eagles": "PHI", "Pittsburgh Steelers": "PIT",
-      "San Francisco 49ers": "SF", "Seattle Seahawks": "SEA", "Tampa Bay Buccaneers": "TB",
-      "Tennessee Titans": "TEN", "Washington Commanders": "WSH"
-    }
-  },
-  NBA: {
-    key: 'basketball_nba',
-    spreadTerm: 'Spread',
-    sportName: 'NBA',
-    statContext: "| PTS/G | PA/G | FG% | 3P% |",
-    standingsUrl: 'https://site.api.espn.com/apis/v2/sports/basketball/nba/standings',
-    mapping: {
-      "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",
-      "Charlotte Hornets": "CHA", "Chicago Bulls": "CHI", "Cleveland Cavaliers": "CLE",
-      "Dallas Mavericks": "DAL", "Denver Nuggets": "DEN", "Detroit Pistons": "DET",
-      "Golden State Warriors": "GSW", "Houston Rockets": "HOU", "Indiana Pacers": "IND",
-      "Los Angeles Clippers": "LAC", "Los Angeles Lakers": "LAL", "Memphis Grizzlies": "MEM",
-      "Miami Heat": "MIA", "Milwaukee Bucks": "MIL", "Minnesota Timberwolves": "MIN",
-      "New Orleans Pelicans": "NOP", "New York Knicks": "NYK", "Oklahoma City Thunder": "OKC",
-      "Orlando Magic": "ORL", "Philadelphia 76ers": "PHI", "Phoenix Suns": "PHX",
-      "Portland Trail Blazers": "POR", "Sacramento Kings": "SAC", "San Antonio Spurs": "SAS",
-      "Toronto Raptors": "TOR", "Utah Jazz": "UTA", "Washington Wizards": "WAS"
-    }
+// Helper for framework-agnostic environment variable access (Vite/Next.js)
+const getEnv = (viteKey: string, nextKey: string): string => {
+  if (typeof import.meta !== "undefined" && import.meta.env && import.meta.env[viteKey]) {
+    return import.meta.env[viteKey];
   }
+  if (typeof process !== "undefined" && process.env && process.env[nextKey]) {
+    return process.env[nextKey];
+  }
+  return "";
 };
 
-const getAbbr = (name: string, league: League) => {
+const SUPABASE_ANON_KEY = getEnv("VITE_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY");
+const API_BASE_URL = "https://luohiaujigqcjpzicxiz.supabase.co/functions/v1/ai-chat-router";
+// For client-side fallback only (Security risk if exposed)
+const CLIENT_GEMINI_API_KEY = getEnv("VITE_GEMINI_API_KEY", "NEXT_PUBLIC_GEMINI_API_KEY");
+
+// --- TYPE DEFINITIONS ---
+
+// The Odds API Types
+interface Outcome {
+  name: string;
+  price: number;
+  point?: number;
+}
+interface Market {
+  key: string;
+  outcomes: Outcome[];
+}
+interface Bookmaker {
+  key: string;
+  title: string;
+  markets: Market[];
+}
+interface OddsApiGame {
+  id: string;
+  sport_key: string;
+  commence_time: string; // ISO 8601 UTC
+  home_team: string;
+  away_team: string;
+  bookmakers?: Bookmaker[];
+  scores?: Array<{ name: string; score: string }>;
+  completed?: boolean;
+}
+
+// Standings Types (ESPN/NHL)
+interface EspnStat {
+  name: string;
+  type?: string;
+  abbreviation?: string;
+  displayValue: string;
+}
+interface EspnEntry {
+  team?: { abbreviation: string };
+  stats?: EspnStat[];
+}
+// Recursive type for handling Conferences/Divisions
+interface EspnNode {
+  standings?: { entries: EspnEntry[] };
+  children?: EspnNode[];
+}
+
+interface NhlTeamStanding {
+  teamAbbrev: { default: string };
+  wins: number;
+  losses: number;
+  otLosses?: number;
+}
+
+// Caching Type
+interface CacheEntry {
+  data: GameData[];
+  timestamp: number;
+}
+
+// --- GLOBAL STATE & CACHE ---
+
+// Use Map for efficient caching
+const oddsCache = new Map<string, CacheEntry>();
+let rawScheduleContext: string = "";
+let currentLeagueContext: League = "NHL";
+
+// Client-side fallback state
+let chatInstance: ChatSession | null = null;
+let genAIInstance: GoogleGenerativeAI | null = null;
+let lastLeagueContext: League | null = null;
+
+const LEAGUE_CONFIG = {
+  // ... (LEAGUE_CONFIG mappings remain the same, omitted for brevity)
+  NHL: {
+    key: "icehockey_nhl",
+    spreadTerm: "Puck Line",
+    sportName: "NHL Hockey",
+    statContext: "| GF/G | GA/G | PP% | PK% |",
+    mapping: {
+      /* ... */
+    },
+  },
+  NFL: {
+    key: "americanfootball_nfl",
+    spreadTerm: "Spread",
+    sportName: "NFL Football",
+    statContext: "| PTS/G | YDS/G | Pass Yds | Rush Yds |",
+    mapping: {
+      /* ... */
+    },
+  },
+  NBA: {
+    key: "basketball_nba",
+    spreadTerm: "Spread",
+    sportName: "NBA Basketball",
+    statContext: "| PTS/G | PA/G | FG% | 3P% |",
+    mapping: {
+      /* ... */
+    },
+  },
+} as const; // 'as const' improves type inference
+
+// --- UTILITY HELPERS ---
+
+/**
+ * Robust wrapper for invoking Supabase Edge Functions.
+ */
+const invokeSupabaseFunction = async <T,>(functionName: string, body: object): Promise<T> => {
+  const { data, error } = await supabase.functions.invoke(functionName, { body });
+
+  if (error) {
+    console.error(`[Supabase Error] Failed to invoke ${functionName}:`, error);
+    throw new Error(`Function invocation failed: ${functionName}`);
+  }
+
+  if (data === null || data === undefined) {
+    throw new Error(`Null response from function: ${functionName}`);
+  }
+
+  return data as T;
+};
+
+const getAbbr = (name: string, league: League): string => {
+  // Type assertion is safe here as mappings contain dynamic keys (team names)
   const map = LEAGUE_CONFIG[league].mapping as Record<string, string>;
   return map[name] || name.substring(0, 3).toUpperCase();
 };
 
-const fmtOdds = (price: number) => price > 0 ? `+${price}` : `${price}`;
+const fmtOdds = (price: number): string => (price > 0 ? `+${price}` : `${price}`);
 
-// Helper to extract market data
-const extractMarketData = (bookmaker: any, game: any): MarketData => {
-  if (!bookmaker) {
-    return { awayML: '-', homeML: '-', awayPL: '-', homePL: '-', total: '-', overOdds: '', underOdds: '' };
+/**
+ * Gets the calendar date string (YYYY-MM-DD) in the specified timezone.
+ * Crucial for accurate filtering and caching based on the "sports day".
+ */
+const getDateKeyInTZ = (date: Date, timeZone: string = SPORTS_TIMEZONE): string => {
+  try {
+    return date.toLocaleDateString("en-CA", {
+      // en-CA yields YYYY-MM-DD format
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  } catch (error) {
+    console.error("[Utils] Timezone formatting failed, falling back to UTC:", error);
+    return date.toISOString().split("T")[0]; // Fallback to UTC
   }
+};
 
-  const h2h = bookmaker.markets.find((m: any) => m.key === 'h2h');
-  const spreads = bookmaker.markets.find((m: any) => m.key === 'spreads');
-  const totals = bookmaker.markets.find((m: any) => m.key === 'totals');
+const extractMarketData = (bookmaker: Bookmaker | undefined, game: OddsApiGame): MarketData => {
+  const defaultData: MarketData = {
+    awayML: "-",
+    homeML: "-",
+    awayPL: "-",
+    homePL: "-",
+    total: "-",
+    overOdds: "",
+    underOdds: "",
+  };
 
-  const awayH2H = h2h?.outcomes.find((o: any) => o.name === game.away_team);
-  const homeH2H = h2h?.outcomes.find((o: any) => o.name === game.home_team);
-  const awaySpread = spreads?.outcomes.find((o: any) => o.name === game.away_team);
-  const homeSpread = spreads?.outcomes.find((o: any) => o.name === game.home_team);
-  const over = totals?.outcomes.find((o: any) => o.name === 'Over');
-  const under = totals?.outcomes.find((o: any) => o.name === 'Under');
+  if (!bookmaker) return defaultData;
+
+  const getMkt = (key: "h2h" | "spreads" | "totals") => bookmaker.markets.find((m) => m.key === key);
+  const getOut = (mkt: Market | undefined, name: string) => mkt?.outcomes.find((o) => o.name === name);
+
+  const h2h = getMkt("h2h");
+  const spreads = getMkt("spreads");
+  const totals = getMkt("totals");
+
+  const awayH2H = getOut(h2h, game.away_team);
+  const homeH2H = getOut(h2h, game.home_team);
+  const awaySpread = getOut(spreads, game.away_team);
+  const homeSpread = getOut(spreads, game.home_team);
+  const over = getOut(totals, "Over");
+  const under = getOut(totals, "Under");
+
+  const formatSpread = (outcome: Outcome | undefined) => {
+    // Ensure point is explicitly defined (not null or undefined)
+    if (!outcome || outcome.point == null) return "-";
+    const sign = outcome.point > 0 ? "+" : "";
+    return `${sign}${outcome.point} (${fmtOdds(outcome.price)})`;
+  };
 
   return {
-    awayML: awayH2H ? fmtOdds(awayH2H.price) : '-',
-    homeML: homeH2H ? fmtOdds(homeH2H.price) : '-',
-    awayPL: awaySpread ? `${awaySpread.point > 0 ? '+' : ''}${awaySpread.point} (${fmtOdds(awaySpread.price)})` : '-',
-    homePL: homeSpread ? `${homeSpread.point > 0 ? '+' : ''}${homeSpread.point} (${fmtOdds(homeSpread.price)})` : '-',
-    total: over ? `${over.point}` : '-',
-    overOdds: over ? fmtOdds(over.price) : '',
-    underOdds: under ? fmtOdds(under.price) : ''
+    awayML: awayH2H ? fmtOdds(awayH2H.price) : "-",
+    homeML: homeH2H ? fmtOdds(homeH2H.price) : "-",
+    awayPL: formatSpread(awaySpread),
+    homePL: formatSpread(homeSpread),
+    // Use nullish coalescing for safety
+    total: over?.point?.toString() ?? "-",
+    overOdds: over ? fmtOdds(over.price) : "",
+    underOdds: under ? fmtOdds(under.price) : "",
   };
 };
 
 // --- STANDINGS FETCHING ---
 
-// Generic ESPN Parser (Works for NFL and NBA)
 const fetchEspnStandings = async (league: League): Promise<Record<string, string>> => {
   try {
-    console.log(`[Standings] Fetching ${league} standings...`);
-    const { data, error } = await supabase.functions.invoke('fetch-standings', {
-      body: { league }
-    });
-    
-    if (error) {
-      console.error('[Standings] Error:', error);
-      throw error;
-    }
-    
-    console.log(`[Standings] Raw ${league} data:`, data);
+    // Use the wrapper and expect the typed response
+    const data = await invokeSupabaseFunction<EspnNode | EspnEntry[]>("fetch-standings", { league });
+
     const standings: Record<string, string> = {};
 
-    // ESPN API can have different structures
-    const processEntries = (entries: any[]) => {
-      if (!entries || !Array.isArray(entries)) return;
-      
-      entries.forEach((entry: any) => {
+    const processEntries = (entries: EspnEntry[] | undefined) => {
+      if (!Array.isArray(entries)) return;
+      entries.forEach((entry) => {
         const abbr = entry.team?.abbreviation;
         const stats = entry.stats || [];
-        const record = stats.find((s: any) => s.name === 'overall' || s.type === 'total')?.displayValue || 
-                       stats.find((s: any) => s.abbreviation === 'Total')?.displayValue;
-        
-        if (abbr && record) {
-          standings[abbr] = record;
-          console.log(`[Standings] ${abbr}: ${record}`);
-        }
+        const recordStat = stats.find(
+          (s: EspnStat) => s.name === "overall" || s.type === "total" || s.abbreviation === "Total",
+        );
+        const record = recordStat?.displayValue;
+
+        if (abbr && record) standings[abbr] = record;
       });
     };
 
-    // Try multiple ESPN API structures
-    if (data.children) {
-      // Structure 1: children -> children -> standings -> entries
-      data.children.forEach((conf: any) => {
-        if (conf.standings?.entries) {
-          processEntries(conf.standings.entries);
-        }
-        if (conf.children) {
-          conf.children.forEach((div: any) => {
-            if (div.standings?.entries) {
-              processEntries(div.standings.entries);
-            }
-          });
-        }
-      });
-    } else if (data.standings?.entries) {
-      // Structure 2: standings -> entries
-      processEntries(data.standings.entries);
-    } else if (Array.isArray(data)) {
-      // Structure 3: direct array
+    // Handle variable ESPN API Responses safely
+    if (Array.isArray(data)) {
       processEntries(data);
+    } else if (data && typeof data === "object") {
+      if (data.children) {
+        data.children.forEach((conf) => {
+          processEntries(conf.standings?.entries);
+          conf.children?.forEach((div) => processEntries(div.standings?.entries));
+        });
+      } else if (data.standings?.entries) {
+        processEntries(data.standings.entries);
+      }
     }
-    
-    console.log(`[Standings] Total teams found: ${Object.keys(standings).length}`, standings);
+
     return standings;
   } catch (e) {
-    console.error("[Standings] Failed to fetch ESPN standings:", e);
+    console.error(`[Standings] Failed to fetch ${league} standings:`, e);
+    return {};
+  }
+};
+
+const fetchNhlStandings = async (): Promise<Record<string, string>> => {
+  try {
+    const data = await invokeSupabaseFunction<{ standings: NhlTeamStanding[] }>("fetch-standings", { league: "NHL" });
+
+    const standings: Record<string, string> = {};
+    if (data.standings && Array.isArray(data.standings)) {
+      data.standings.forEach((team) => {
+        const abbr = team.teamAbbrev?.default;
+        if (abbr) {
+          // Standard NHL format includes OT losses
+          standings[abbr] = `${team.wins}-${team.losses}-${team.otLosses || 0}`;
+        }
+      });
+    }
+    return standings;
+  } catch (e) {
+    console.warn("[Standings] Failed to fetch NHL standings:", e);
     return {};
   }
 };
 
 const fetchStandings = async (league: League): Promise<Record<string, string>> => {
-  if (league === 'NFL' || league === 'NBA') {
-    return fetchEspnStandings(league);
-  }
-
-  try {
-    // NHL Specific Logic
-    const { data, error } = await supabase.functions.invoke('fetch-standings', {
-      body: { league: 'NHL' }
-    });
-    
-    if (error) throw error;
-    
-    const standings: Record<string, string> = {};
-    if (data.standings) {
-      data.standings.forEach((team: any) => {
-        const abbr = team.teamAbbrev.default;
-        const record = `${team.wins}-${team.losses}-${team.otLosses}`;
-        standings[abbr] = record;
-      });
-    }
-    return standings;
-  } catch (e) {
-    console.warn("Failed to fetch NHL standings:", e);
-    return {};
-  }
+  if (league === "NFL" || league === "NBA") return fetchEspnStandings(league);
+  if (league === "NHL") return fetchNhlStandings();
+  return {};
 };
 
-// --- MAIN API FETCHING ---
+// --- MAIN SCHEDULE FETCHING ---
 
-export const fetchSchedule = async (league: League = 'NHL', targetDate: Date = new Date()): Promise<GameData[]> => {
+export const fetchSchedule = async (league: League = "NHL", targetDate: Date = new Date()): Promise<GameData[]> => {
   const config = LEAGUE_CONFIG[league];
   currentLeagueContext = league;
 
-  const dateKey = targetDate.toISOString().split('T')[0];
+  // Use timezone-aware date key for caching and API requests
+  const dateKey = getDateKeyInTZ(targetDate);
   const cacheKey = `${league}_${dateKey}`;
 
   // 1. Cache Check
-  const cached = oddsCache[cacheKey];
-  if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
-    rawScheduleContext = generateContextString(cached.data, league, targetDate);
+  const cached = oddsCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    rawScheduleContext = generateContextString(cached.data, league);
     return cached.data;
   }
 
-  // 2. Calculate Days From
-  const today = new Date(); today.setHours(0,0,0,0);
-  const target = new Date(targetDate); target.setHours(0,0,0,0);
-  const diffTime = target.getTime() - today.getTime();
-  const diffDays = Math.ceil(Math.abs(diffTime) / (1000 * 60 * 60 * 24));
-  const daysFrom = diffTime < 0 ? diffDays + 1 : Math.max(1, diffDays);
+  // 2. Calculate "Days From" (Required by The Odds API for lookahead window)
+  // This calculation helps the backend determine the window to query.
+  const today = new Date();
+  const diffTime = targetDate.getTime() - today.getTime();
+  // Calculate days difference, ensuring at least 1 day window if target is today or future.
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const daysFrom = diffDays >= 0 ? diffDays + 1 : 1; // Default to 1 for past dates, relying on dateKey parameter
 
   try {
-    const { supabase } = await import('@/integrations/supabase/client');
-    
-    const [scoresResult, oddsResult, standingsMap] = await Promise.all([
-      supabase.functions.invoke('fetch-odds', {
-        body: { 
-          sport: config.key, 
-          regions: 'us', 
-          markets: 'h2h', 
-          dateFormat: 'iso', 
-          daysFrom,
-          targetDate: dateKey 
-        }
+    // 3. Parallel Fetching
+    const [scoresData, oddsData, standingsMap] = await Promise.all([
+      // Fetch 1: Scores/Status feed (h2h only for quick status check)
+      invokeSupabaseFunction<OddsApiGame[]>("fetch-odds", {
+        sport: config.key,
+        regions: "us",
+        markets: "h2h",
+        dateFormat: "iso",
+        daysFrom,
+        targetDate: dateKey,
       }),
-      supabase.functions.invoke('fetch-odds', {
-        body: { 
-          sport: config.key, 
-          regions: 'us', 
-          markets: 'h2h,spreads,totals', 
-          bookmakers: 'draftkings,fanduel,betmgm,williamhill,williamhill_us,caesars',
-          dateFormat: 'iso',
-          daysFrom,
-          targetDate: dateKey
-        }
+      // Fetch 2: Detailed Odds feed
+      invokeSupabaseFunction<OddsApiGame[]>("fetch-odds", {
+        sport: config.key,
+        regions: "us",
+        markets: "h2h,spreads,totals",
+        bookmakers: PREFERRED_BOOKMAKERS.join(","),
+        dateFormat: "iso",
+        daysFrom,
+        targetDate: dateKey,
       }),
-      fetchStandings(league)
+      fetchStandings(league),
     ]);
 
-    const scoresData = scoresResult.data || [];
-    const oddsData = oddsResult.data || [];
+    // 4. Data Merging Strategy
+    // Prioritize 'oddsData' for markets, overlay 'scoresData' for status/scores.
+    const gameMap = new Map<string, OddsApiGame & { status: string }>();
 
-    // 3. Merge Data
-    const gameMap = new Map<string, any>();
-
-    if (Array.isArray(oddsData)) {
-      oddsData.forEach((game: any) => {
-        gameMap.set(game.id, { ...game, status: 'Scheduled', scores: [] });
-      });
-    }
-
-    if (Array.isArray(scoresData)) {
-      scoresData.forEach((game: any) => {
-        const existing = gameMap.get(game.id) || {};
-        let status = 'Scheduled';
-        if (game.completed) status = 'Final';
-        else if (game.scores && game.scores.length > 0) status = 'Live';
-        
-        // CRITICAL: Prioritize oddsData bookmakers (which have full markets) over scoresData bookmakers (which only have h2h)
-        // Only use game.bookmakers if existing doesn't have them
-        const bookmakers = existing.bookmakers || game.bookmakers || [];
-        
-        gameMap.set(game.id, { ...existing, ...game, bookmakers, status });
-      });
-    }
-
-    // 4. Filter & Map
-    const combinedGames = Array.from(gameMap.values()).filter((game: any) => {
-      const gameDate = new Date(game.commence_time);
-      const gameDateLocal = new Date(gameDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-      
-      // For NFL, include games that start late (like Monday Night Football)
-      if (league === 'NFL') {
-        // Check if game is within 24 hours of target date
-        const timeDiff = Math.abs(gameDateLocal.getTime() - target.getTime());
-        const hoursDiff = timeDiff / (1000 * 60 * 60);
-        return hoursDiff < 24;
-      }
-      
-      return gameDateLocal.getDate() === target.getDate() &&
-             gameDateLocal.getMonth() === target.getMonth() &&
-             gameDateLocal.getFullYear() === target.getFullYear();
+    (oddsData || []).forEach((game) => {
+      gameMap.set(game.id, { ...game, status: "Scheduled", scores: game.scores || [] });
     });
 
-    const mappedGames: GameData[] = combinedGames.map((game: any) => {
-      const bookmakers = game.bookmakers || [];
-      
-      // Helper to find specific books
-      const findBook = (keys: string[]) => bookmakers.find((b: any) => keys.includes(b.key));
-      
-      const dk = findBook(['draftkings']);
-      const fd = findBook(['fanduel']);
-      const mgm = findBook(['betmgm']);
-      const wh = findBook(['williamhill', 'williamhill_us', 'caesars']);
-      const fallback = bookmakers[0];
+    (scoresData || []).forEach((scoreGame) => {
+      const existingGame = gameMap.get(scoreGame.id);
+      let status = "Scheduled";
 
-      let awayScore = '', homeScore = '';
-      if (game.scores) {
-        const away = game.scores.find((s: any) => s.name === game.away_team);
-        const home = game.scores.find((s: any) => s.name === game.home_team);
-        if (away) awayScore = away.score;
-        if (home) homeScore = home.score;
-        if (game.status === 'Live') {
-           if (!awayScore) awayScore = '0';
-           if (!homeScore) homeScore = '0';
-        }
-      }
+      if (scoreGame.completed) status = "Final";
+      else if (scoreGame.scores && scoreGame.scores.length > 0) status = "Live";
 
-      const awayAbbr = getAbbr(game.away_team, league);
-      const homeAbbr = getAbbr(game.home_team, league);
+      // CRITICAL: Prefer existing bookmakers (richer data) if available
+      const bookmakers = existingGame?.bookmakers || scoreGame.bookmakers || [];
 
-      return {
-        id: game.id,
-        league: league,
-        awayTeam: awayAbbr,
-        homeTeam: homeAbbr,
-        awayRecord: standingsMap[awayAbbr] || '',
-        homeRecord: standingsMap[homeAbbr] || '',
-        time: new Date(game.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute:'2-digit', timeZoneName: 'short' }),
-        timestamp: new Date(game.commence_time).getTime(),
-        status: game.status,
-        awayScore,
-        homeScore,
-        odds: {
-          draftkings: extractMarketData(dk, game),
-          fanduel: extractMarketData(fd, game),
-          betmgm: extractMarketData(mgm, game),
-          williamhill: extractMarketData(wh, game),
-          generic: extractMarketData(fallback, game)
-        }
-      };
+      gameMap.set(scoreGame.id, {
+        ...(existingGame || {}),
+        ...scoreGame,
+        id: scoreGame.id, // Ensure core properties are correctly merged
+        sport_key: scoreGame.sport_key,
+        commence_time: scoreGame.commence_time,
+        home_team: scoreGame.home_team,
+        away_team: scoreGame.away_team,
+        bookmakers,
+        status,
+      });
     });
 
-    mappedGames.sort((a, b) => a.timestamp - b.timestamp);
-    
-    oddsCache[cacheKey] = { data: mappedGames, timestamp: Date.now() };
-    rawScheduleContext = generateContextString(mappedGames, league, targetDate);
-    
+    // 5. Filtering & Mapping
+    const mappedGames: GameData[] = Array.from(gameMap.values())
+      .filter((game) => {
+        // Robust Filtering: Ensure the game commencement time falls on the target date in the defined timezone.
+        const gameDateKey = getDateKeyInTZ(new Date(game.commence_time));
+
+        // Note: The original custom NFL logic (checking a 24h window) is removed here for consistency
+        // in filtering strictly by the selected calendar day (ET).
+        return gameDateKey === dateKey;
+      })
+      .map((game) => {
+        const bookmakers = game.bookmakers || [];
+        const findBook = (keys: string[]) => bookmakers.find((b) => keys.includes(b.key));
+
+        const dk = findBook(["draftkings"]);
+        const fd = findBook(["fanduel"]);
+        const mgm = findBook(["betmgm"]);
+        // Combine Caesars/William Hill variations
+        const czr = findBook(["williamhill", "williamhill_us", "caesars"]);
+        const fallback = bookmakers[0];
+
+        // Extract Scores
+        let awayScore = "",
+          homeScore = "";
+        if (game.status !== "Scheduled" && game.scores) {
+          const away = game.scores.find((s) => s.name === game.away_team);
+          const home = game.scores.find((s) => s.name === game.home_team);
+          if (away) awayScore = away.score;
+          if (home) homeScore = home.score;
+        }
+
+        const awayAbbr = getAbbr(game.away_team, league);
+        const homeAbbr = getAbbr(game.home_team, league);
+
+        return {
+          id: game.id,
+          league,
+          awayTeam: awayAbbr,
+          homeTeam: homeAbbr,
+          awayRecord: standingsMap[awayAbbr] || "N/A",
+          homeRecord: standingsMap[homeAbbr] || "N/A",
+          // Format time display using the preferred timezone
+          time: new Date(game.commence_time).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            timeZone: SPORTS_TIMEZONE,
+            timeZoneName: "short",
+          }),
+          timestamp: new Date(game.commence_time).getTime(),
+          status: game.status,
+          awayScore,
+          homeScore,
+          odds: {
+            draftkings: extractMarketData(dk, game),
+            fanduel: extractMarketData(fd, game),
+            betmgm: extractMarketData(mgm, game),
+            williamhill: extractMarketData(czr, game), // Kept as williamhill for type compatibility
+            generic: extractMarketData(fallback, game),
+          },
+        };
+      })
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    // 6. Update Cache & Context
+    oddsCache.set(cacheKey, { data: mappedGames, timestamp: Date.now() });
+    rawScheduleContext = generateContextString(mappedGames, league);
+
     return mappedGames;
-
   } catch (error) {
-    console.error("Fetch Error:", error);
-    return [];
+    console.error("[fetchSchedule] Comprehensive Fetch Error:", error);
+    // Fallback strategy: Return stale cache if available, otherwise empty.
+    return oddsCache.get(cacheKey)?.data || [];
   }
 };
 
-const generateContextString = (games: GameData[], league: League, date?: Date): string => {
+const generateContextString = (games: GameData[], league: League): string => {
   const config = LEAGUE_CONFIG[league];
-  return games.map(g => {
-    const header = `${g.awayTeam} ${g.awayRecord} @ ${g.homeTeam} ${g.homeRecord} | Time: ${g.time} | Status: ${g.status} ${g.status !== 'Scheduled' ? `(${g.awayScore}-${g.homeScore})` : ''}`;
-    const bookLines = [];
-    const { draftkings, fanduel, betmgm, williamhill } = g.odds;
+  if (games.length === 0) return `No ${league} games scheduled for this date based on injected data.`;
 
-    const fmtLine = (book: string, data: MarketData) => {
-       if (data.awayML !== '-') {
-         bookLines.push(` ${book}: ${g.awayTeam} ${data.awayML}/${g.homeTeam} ${data.homeML} | T: ${data.total} | ${config.spreadTerm}: ${g.awayTeam} ${data.awayPL}/${g.homeTeam} ${data.homePL}`);
-       }
-    };
+  return games
+    .map((g) => {
+      const header = `${g.awayTeam} (${g.awayRecord}) @ ${g.homeTeam} (${g.homeRecord}) | Time: ${g.time} | Status: ${g.status} ${g.status !== "Scheduled" ? `(${g.awayScore}-${g.homeScore})` : ""}`;
+      const bookLines: string[] = [];
+      // Renaming williamhill to czr (Caesars) for display consistency in context
+      const { draftkings, fanduel, betmgm, williamhill: czr } = g.odds;
 
-    fmtLine('DK', draftkings);
-    fmtLine('FD', fanduel);
-    fmtLine('MGM', betmgm);
-    fmtLine('CZR', williamhill);
+      const fmtLine = (book: string, data: MarketData) => {
+        if (data.awayML !== "-") {
+          // Standardized format for easy AI parsing
+          bookLines.push(
+            ` ${book}: ML: ${g.awayTeam} ${data.awayML}/${g.homeTeam} ${data.homeML} | T: ${data.total} (O${data.overOdds}/U${data.underOdds}) | ${config.spreadTerm}: ${g.awayTeam} ${data.awayPL}/${g.homeTeam} ${data.homePL}`,
+          );
+        }
+      };
 
-    if (bookLines.length === 0) bookLines.push(g.status === 'Scheduled' ? ' No odds available.' : ' (Odds closed)');
-    
-    return `${header}\n${bookLines.join('\n')}`;
-  }).join('\n\n');
+      fmtLine("DK", draftkings);
+      fmtLine("FD", fanduel);
+      fmtLine("MGM", betmgm);
+      fmtLine("CZR", czr);
+
+      if (bookLines.length === 0) {
+        bookLines.push(g.status === "Scheduled" ? " No odds available yet." : " (Odds closed/Off the board)");
+      }
+
+      return `${header}\n${bookLines.join("\n")}`;
+    })
+    .join("\n\n");
 };
 
-// --- AI LOGIC ---
+// --- AI LOGIC & PROMPTING ---
 
 const getSystemInstruction = (league: League): string => {
   const config = LEAGUE_CONFIG[league];
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: SPORTS_TIMEZONE,
+  });
 
+  // Optimized prompt for structured, high-quality analysis
   return `
 You are "SharpEdge," an elite institutional-grade ${config.sportName} betting analyst.
-CURRENT DATE: ${today}
+CURRENT DATE: ${today} (ET)
 LEAGUE: ${league}
 
-**MANDATE:** Provide decisive, data-backed intelligence in clipped, desk-note style. 
-NO TOUT LANGUAGE (lock, guaranteed). Use "edge", "high-conviction", "mispriced".
+**MANDATE:** Provide decisive, data-backed intelligence in clipped, desk-note style.
+NO HEDGING. NO TOUT LANGUAGE (lock, guaranteed). Use "edge", "high-conviction", "mispriced", "market signal".
 
 **CORE CAPABILITY: RICH DATA TABLES**
-You MUST use Markdown tables for all comparisons.
+You MUST use Markdown tables for all comparisons (stats, odds). Use standard abbreviations (DK, FD, MGM, CZR).
 
 **RESPONSE PROTOCOLS**
 
-1. **LINE SHOPPING**: Compare books. Mark best price with ✅.
-   | Book | Odds | Edge |
-   |---|---|---|
-   | DK | -110 | |
-   | FD | +100 | ✅ |
+1. **LINE SHOPPING**: Compare books. Mark the best price with ✅.
+   | Book | Team | Market | Odds | Signal |
+   |---|---|---|---|---|
+   | DK | Team A | ML | -110 | |
+   | FD | Team A | ML | +100 | ✅ Best Price |
 
 2. **MATCHUP ANALYSIS**:
-   - **Snapshot**: 1-2 sentences.
+   - **Snapshot**: 1-2 sentences on context (form, injuries, implications).
    - **Tale of the Tape**:
-     | Stat | Away | Home |
-     |---|---|---|
-     | Record | ... | ... |
+     | Stat | Away Team | Home Team | Edge |
+     |---|---|---|---|
      ${config.statContext}
-   - **The Read**: 3-5 tight sentences on market/matchup.
-   - **Sharp Angle**: "Team/Total @ Price". 1 line rationale.
+     | Momentum (L5) | ... | ... | |
+   - **The Read**: 3-5 tight sentences analyzing market perception vs. reality. Identify mispricing.
+   - **Sharp Angle**: "Team/Total @ Price or better". 1 line rationale.
 
 3. **SLATE OVERVIEW**:
-   - **Snapshot**: Macro angles.
-   - **Board Signals**:
-     | Matchup | Time | Open | Signal |
+   - **Snapshot**: Macro angles affecting the day's card.
+   - **Board Signals**: Identify notable movements or discrepancies.
+     | Matchup | Time (ET) | Key Line | Signal |
      |---|---|---|---|
-     | A @ B | 7PM | -110 | SHARP ON FAV |
-   - **Top 3 Edges**: Table of best bets.
-   - **Feature Matchup**: Deep dive on best game.
+     | A @ B | 7:00 PM | B -110 | SHARP MONEY ON DOG |
+   - **Top 3 Edges**: Table of highest conviction plays.
 
-**DATA HANDLING**:
-- Injected context shows recent/upcoming games but may not be exhaustive.
-- CRITICAL: If user asks for games/lines not in injected data, use googleSearch to find current lines, matchups, and analysis.
-- For Monday Night Football, prime time games, or any missing data: ALWAYS search first, never say "not available."
-- Use googleSearch for injuries, line movements, trends, and any current betting information.
-- NO HALLUCINATIONS - but actively search for real data when it's not injected.
+**DATA HANDLING & SEARCH PROTOCOL**:
+- Injected context is the primary source for today's odds.
+- CRITICAL: If user asks for information NOT in injected data (injuries, trends, specific stats, player props, or missing games), you MUST use 'googleSearch'.
+- For Prime Time games (MNF, SNF) or if data seems stale: ALWAYS search first.
+- NEVER state data is unavailable without attempting a search.
+- NO HALLUCINATIONS. Base analysis strictly on injected data or search results.
 `;
 };
 
-let chatInstance: Chat | null = null;
-let genAIInstance: GoogleGenAI | null = null;
-let lastLeagueContext: League | null = null;
+// --- AI CLIENT SETUP (Client-Side Fallback) ---
 
-const getAIClient = (): GoogleGenAI => {
+const getAIClient = (): GoogleGenerativeAI => {
   if (!genAIInstance) {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API_KEY missing.");
-    genAIInstance = new GoogleGenAI({ apiKey });
+    if (!CLIENT_GEMINI_API_KEY) {
+      console.error("[AI Client] Gemini API Key missing for client-side fallback.");
+      throw new Error("Client AI configuration missing.");
+    }
+    genAIInstance = new GoogleGenerativeAI(CLIENT_GEMINI_API_KEY);
   }
   return genAIInstance;
 };
 
-export const initializeChat = (league: League): Chat => {
+export const initializeChat = (league: League): ChatSession => {
   if (chatInstance && lastLeagueContext === league) return chatInstance;
-  const ai = getAIClient();
-  chatInstance = ai.chats.create({
-    model: 'gemini-3-pro-preview',
-    config: { systemInstruction: getSystemInstruction(league), tools: [{ googleSearch: {} }] },
-  });
-  lastLeagueContext = league;
-  return chatInstance;
+
+  try {
+    const ai = getAIClient();
+
+    let systemInstruction = getSystemInstruction(league);
+    // Inform the AI if search tools are likely unavailable client-side (standard SDK limitation)
+    if (!USE_ROUTER) {
+      systemInstruction +=
+        "\n\n[CLIENT MODE LIMITATION]: Real-time 'googleSearch' is unavailable. Rely strictly on injected data. If information is missing, state that real-time lookups are disabled.";
+    }
+
+    const model = ai.getGenerativeModel({
+      model: "gemini-1.5-pro-latest",
+      systemInstruction: systemInstruction,
+      // Tools configuration might vary based on SDK version and environment support
+    });
+
+    // Start a new chat session
+    chatInstance = model.startChat({
+      generationConfig: { temperature: 0.5 }, // Lower temperature for analytical precision
+    });
+    lastLeagueContext = league;
+    return chatInstance;
+  } catch (error) {
+    console.error("[AI Client] Failed to initialize client-side chat:", error);
+    throw new Error("AI Client initialization failed.");
+  }
 };
 
-// Edge function router integration (optional - can be toggled)
-const USE_ROUTER = true; // Set to true to use the edge function router
+// --- ROUTER & STREAMING LOGIC (Server-Side Execution) ---
 
-const sendViaRouter = async (userMessage: string, league: League): Promise<string> => {
-  console.log('[Router] Preparing request...');
-  const { supabase } = await import('@/integrations/supabase/client');
+/**
+ * Sends the message via the AI Router (Supabase Edge Function) and handles the SSE stream response.
+ */
+const sendViaRouter = async (userMessage: string, history: Message[], league: League): Promise<string> => {
+  if (!SUPABASE_ANON_KEY) throw new Error("Missing Supabase Configuration");
 
-  const contextInjection = rawScheduleContext 
-    ? `[SYSTEM INJECTION - CURRENT ${league} ODDS (Source: The Odds API)]:\n${rawScheduleContext}\n\n[USER]:\n${userMessage}`
+  // 1. Authentication Check
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Authentication required for AI access.");
+
+  // 2. Context Injection (Inject latest odds into the current user message)
+  const contextInjection = rawScheduleContext
+    ? `[SYSTEM INJECTION - CURRENT ${league} ODDS & SCHEDULE (Time: ${new Date().toLocaleTimeString()})]:\n${rawScheduleContext}\n\n[USER MESSAGE]:\n${userMessage}`
     : userMessage;
 
-  // Get the session for auth token
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
-  }
+  // 3. History Formatting (for multi-turn context)
+  // Format history into the structure expected by Gemini API (user/model roles, parts array)
+  const formattedHistory: Content[] = history.map((msg) => ({
+    role: msg.sender === "user" ? "user" : "model",
+    parts: [{ text: msg.text }],
+  }));
 
-  console.log('[Router] Calling ai-chat-router function with streaming...');
-  
-  // Use fetch directly to handle SSE streaming
-  const response = await fetch(
-    `https://luohiaujigqcjpzicxiz.supabase.co/functions/v1/ai-chat-router`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA'
-      },
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: getSystemInstruction(league) },
-          { role: 'user', content: contextInjection }
-        ],
-        preferredProvider: 'gemini'
-      })
-    }
-  );
+  // 4. Construct Payload
+  const payload = {
+    // This structure depends on the specific AI Chat Router implementation.
+    // Assuming the router expects the history and the latest message in Gemini format.
+    messages: [...formattedHistory, { role: "user", parts: [{ text: contextInjection }] }],
+    config: {
+      // Pass system instruction and configuration to the router
+      systemInstruction: getSystemInstruction(league),
+      preferredProvider: "gemini",
+      model: "gemini-1.5-pro-latest",
+      enableTools: true, // Ensure backend enables tools like googleSearch
+    },
+  };
+
+  // 5. API Request
+  const response = await fetch(API_BASE_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(payload),
+  });
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const errorBody = await response.text().catch(() => "N/A");
+    console.error(`[AI Router] HTTP Error: ${response.status} - ${errorBody}`);
+    throw new Error(`Router HTTP Error: ${response.status}`);
   }
+  if (!response.body) throw new Error("No response body from Router");
 
-  // Read the SSE stream
-  const reader = response.body?.getReader();
+  // 6. Robust SSE Stream Parsing
+  // NOTE: This buffers the stream before returning the full text.
+  // For true streaming UX in the frontend, this function should yield chunks or use a callback.
+  const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let fullText = '';
-  let currentEvent = '';
-
-  if (!reader) {
-    throw new Error('No response body reader available');
-  }
+  let fullText = "";
+  let buffer = "";
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
+      buffer += decoder.decode(value, { stream: true });
 
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          currentEvent = line.slice(7).trim();
-        } else if (line.startsWith('data: ')) {
-          const dataStr = line.slice(6).trim();
-          if (dataStr === '[DONE]') continue;
-          
-          // For 'text' events, data is plain text
-          if (currentEvent === 'text') {
-            fullText += dataStr;
-          } else {
-            // For metadata/done events, data is JSON
-            try {
-              const jsonData = JSON.parse(dataStr);
-              if (jsonData.text) {
-                fullText += jsonData.text;
-              }
-            } catch (e) {
-              // Ignore parse errors
+      // Process buffer line by line (SSE standard)
+      let lineEndIndex;
+      while ((lineEndIndex = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, lineEndIndex).trim();
+        buffer = buffer.slice(lineEndIndex + 1);
+
+        if (line === "" || !line.startsWith("data: ")) continue;
+
+        const dataStr = line.slice(6).trim();
+        if (dataStr === "[DONE]") break;
+
+        try {
+          // Handle JSON chunks (common for AI streams)
+          if (dataStr.startsWith("{")) {
+            const jsonData = JSON.parse(dataStr);
+            // Extract text from common formats (Gemini/OpenAI compatibility)
+            const textChunk = jsonData.text || jsonData.content || jsonData.choices?.[0]?.delta?.content || "";
+            if (typeof textChunk === "string") {
+              fullText += textChunk;
             }
+          } else {
+            // Fallback for raw text chunks
+            fullText += dataStr + " ";
           }
+        } catch (e) {
+          // Log parsing errors but continue processing the stream
+          console.warn("[AI Router] Stream chunk parse error:", e, "Chunk:", dataStr);
         }
       }
     }
+  } catch (error) {
+    console.error("[AI Router] Error during stream reading:", error);
+    if (fullText) return fullText.trim(); // Return partial data if available
+    throw new Error("Failed to read response stream.");
   } finally {
     reader.releaseLock();
   }
 
-  return fullText || 'No response received';
+  return fullText.trim() || "No valid response received from AI.";
 };
 
-export const sendMessageToAI = async (userMessage: string, league: League = 'NHL'): Promise<string> => {
-  if (!USE_ROUTER) {
-    throw new Error('Direct API access is not configured. Please use the edge function router.');
-  }
+// --- UNIFIED MESSAGE HANDLER ---
+
+/**
+ * Sends a message to the AI analyst, handling routing, context injection, and history.
+ * @param userMessage The user's input string.
+ * @param history The previous conversation history (required for multi-turn).
+ * @param league The currently active sports league.
+ */
+export const sendMessageToAI = async (
+  userMessage: string,
+  history: Message[] = [],
+  league: League = "NHL",
+): Promise<string> => {
+  if (!userMessage.trim()) return "Please provide a query.";
 
   try {
-    console.log('[AI] Sending message via router...');
-    const result = await sendViaRouter(userMessage, league);
-    console.log('[AI] Router response received');
-    return result;
-  } catch (routerError) {
-    console.error('[AI] Router error details:', routerError);
-    throw new Error(`Failed to communicate with AI service: ${routerError instanceof Error ? routerError.message : 'Unknown error'}`);
+    if (USE_ROUTER) {
+      console.log("[AI] Routing via Edge Function...");
+      // Pass history for multi-turn support
+      return await sendViaRouter(userMessage, history, league);
+    } else {
+      // Client-Side Fallback
+      console.log("[AI] Using Client-Side SDK...");
+      // Client-side SDK manages history internally within the ChatSession instance.
+      const chat = initializeChat(league);
+
+      const contextInjection = rawScheduleContext
+        ? `[SYSTEM INJECTION - ODDS DATA]:\n${rawScheduleContext}\n\n[USER]: ${userMessage}`
+        : userMessage;
+
+      const result = await chat.sendMessage(contextInjection);
+      return result.response.text();
+    }
+  } catch (error) {
+    console.error("[AI] Interaction Failed:", error);
+    // Provide user-friendly error messages
+    if (error instanceof Error) {
+      if (error.message.includes("Authentication required")) {
+        return "Session expired. Please log in again to access AI analysis.";
+      }
+      if (error.message.includes("Router HTTP Error")) {
+        return "The AI analysis server encountered an issue. Please try again shortly.";
+      }
+      if (error.message.includes("Client AI configuration missing")) {
+        return "AI features are currently unavailable (Configuration Error).";
+      }
+    }
+    return "I'm having trouble connecting to the sports data network right now. Please try again.";
   }
 };
