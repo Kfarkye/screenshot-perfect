@@ -76,12 +76,15 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({
       const messagesArray = [
         {
           role: 'system',
-          content: `You are analyzing a ${game.league} betting pick for ${game.awayTeam} @ ${game.homeTeam}. 
-Pick: ${pick.pick_side} at ${pick.odds_at_generation > 0 ? '+' : ''}${pick.odds_at_generation}
-Confidence: ${pick.confidence_score}%
-Reasoning: ${pick.reasoning_text}
+          content: `You are a knowledgeable sports betting analyst. The user is asking about THIS specific game:
 
-Answer questions about this pick concisely and helpfully.`
+**Game**: ${game.awayTeam} @ ${game.homeTeam} (${game.league})
+**AI Pick**: ${pick.pick_side}
+**Odds**: ${pick.odds_at_generation > 0 ? '+' : ''}${pick.odds_at_generation}
+**Confidence**: ${pick.confidence_score}%
+**Reasoning**: ${pick.reasoning_text}
+
+IMPORTANT: When the user says "this game", "the game", or "this pick" they are referring to ${game.awayTeam} @ ${game.homeTeam}. DO NOT ask them which game they're talking about - you already know it's ${game.awayTeam} vs ${game.homeTeam}. Provide analysis, insights, and answer questions about THIS specific matchup and pick.`
         },
         ...chatMessages.map(msg => ({ 
           role: msg.role, 
