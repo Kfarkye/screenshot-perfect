@@ -47,8 +47,8 @@ const SERVICE_NAME = "ai-chat-router";
 const DEPLOYMENT_REGION = Deno.env.get("DENO_REGION") || "unknown";
 
 const CONFIG = {
-  API_CONNECT_TIMEOUT_MS: 15000,
-  STREAM_INACTIVITY_TIMEOUT_MS: 25000,
+  API_CONNECT_TIMEOUT_MS: 60000, // Increased to 60s for complex queries with googleSearch
+  STREAM_INACTIVITY_TIMEOUT_MS: 45000, // Increased to 45s
   STREAM_TOTAL_TIMEOUT_MS: 180000,
   MAX_RETRIES: 3,
   RETRY_BASE_DELAY_MS: 500,
