@@ -281,9 +281,9 @@ export const fetchSchedule = async (league: League = 'NHL', targetDate: Date = n
         if (game.completed) status = 'Final';
         else if (game.scores && game.scores.length > 0) status = 'Live';
         
-        // CRITICAL: Preserve bookmakers/odds from existing data for completed games
-        // The scores API doesn't return bookmakers, but we need them to show closing lines
-        const bookmakers = game.bookmakers || existing.bookmakers || [];
+        // CRITICAL: Prioritize oddsData bookmakers (which have full markets) over scoresData bookmakers (which only have h2h)
+        // Only use game.bookmakers if existing doesn't have them
+        const bookmakers = existing.bookmakers || game.bookmakers || [];
         
         gameMap.set(game.id, { ...existing, ...game, bookmakers, status });
       });
