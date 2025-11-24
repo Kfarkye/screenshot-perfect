@@ -73,9 +73,9 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({
 
     try {
       // Build messages array with system context and conversation history
-      const messages = [
+      const messagesArray = [
         {
-          role: 'system' as const,
+          role: 'system',
           content: `You are analyzing a ${game.league} betting pick for ${game.awayTeam} @ ${game.homeTeam}. 
 Pick: ${pick.pick_side} at ${pick.odds_at_generation > 0 ? '+' : ''}${pick.odds_at_generation}
 Confidence: ${pick.confidence_score}%
@@ -84,16 +84,16 @@ Reasoning: ${pick.reasoning_text}
 Answer questions about this pick concisely and helpfully.`
         },
         ...chatMessages.map(msg => ({ 
-          role: msg.role as 'user' | 'assistant', 
+          role: msg.role, 
           content: msg.content 
         })),
-        { role: 'user' as const, content: inputMessage }
+        { role: 'user', content: inputMessage }
       ];
 
-      console.log('Sending to ai-chat-router:', { messages });
+      console.log('Sending request with payload:', JSON.stringify({ messages: messagesArray }, null, 2));
 
       const { data, error } = await supabase.functions.invoke('ai-chat-router', {
-        body: { messages }
+        body: JSON.parse(JSON.stringify({ messages: messagesArray }))
       });
 
       console.log('Response from ai-chat-router:', { data, error });
