@@ -240,7 +240,7 @@ export const fetchSchedule = async (league: League = 'NHL', targetDate: Date = n
           markets: 'h2h,spreads,totals', 
           bookmakers: 'draftkings,fanduel,betmgm,williamhill,williamhill_us,caesars',
           dateFormat: 'iso',
-          daysFrom: 3  // Look ahead 3 days to catch Monday Night Football
+          daysFrom // Use same daysFrom as scores to fetch odds for target date
         }
       }),
       fetchStandings(league)
@@ -265,7 +265,11 @@ export const fetchSchedule = async (league: League = 'NHL', targetDate: Date = n
         if (game.completed) status = 'Final';
         else if (game.scores && game.scores.length > 0) status = 'Live';
         
-        gameMap.set(game.id, { ...existing, ...game, status });
+        // CRITICAL: Preserve bookmakers/odds from existing data for completed games
+        // The scores API doesn't return bookmakers, but we need them to show closing lines
+        const bookmakers = game.bookmakers || existing.bookmakers || [];
+        
+        gameMap.set(game.id, { ...existing, ...game, bookmakers, status });
       });
     }
 
