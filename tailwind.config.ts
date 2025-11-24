@@ -14,6 +14,59 @@ export default {
     },
     extend: {
       colors: {
+        // Essence v3.0 Core Palette
+        blue: {
+          50: "hsl(var(--essence-core-blue-50))",
+          100: "hsl(var(--essence-core-blue-100))",
+          300: "hsl(var(--essence-core-blue-300))",
+          500: "hsl(var(--essence-core-blue-500))",
+          600: "hsl(var(--essence-core-blue-600))",
+          700: "hsl(var(--essence-core-blue-700))",
+          800: "hsl(var(--essence-core-blue-800))",
+          950: "hsl(var(--essence-core-blue-950))",
+        },
+        neutral: {
+          0: "hsl(var(--essence-core-neutral-0))",
+          50: "hsl(var(--essence-core-neutral-50))",
+          100: "hsl(var(--essence-core-neutral-100))",
+          200: "hsl(var(--essence-core-neutral-200))",
+          400: "hsl(var(--essence-core-neutral-400))",
+          600: "hsl(var(--essence-core-neutral-600))",
+          700: "hsl(var(--essence-core-neutral-700))",
+          800: "hsl(var(--essence-core-neutral-800))",
+          900: "hsl(var(--essence-core-neutral-900))",
+          950: "hsl(var(--essence-core-neutral-950))",
+        },
+        
+        // Essence Semantic Tokens
+        surface: {
+          canvas: "hsl(var(--essence-surface-canvas))",
+          primary: "hsl(var(--essence-surface-primary))",
+          secondary: "hsl(var(--essence-surface-secondary))",
+          tertiary: "hsl(var(--essence-surface-tertiary))",
+        },
+        content: {
+          primary: "hsl(var(--essence-content-primary))",
+          secondary: "hsl(var(--essence-content-secondary))",
+          tertiary: "hsl(var(--essence-content-tertiary))",
+          inverse: "hsl(var(--essence-content-inverse))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--essence-accent-default))",
+          hover: "hsl(var(--essence-accent-hover))",
+          text: "hsl(var(--essence-accent-text))",
+        },
+        semantic: {
+          success: "hsl(var(--essence-semantic-success))",
+          warning: "hsl(var(--essence-semantic-warning))",
+          error: "hsl(var(--essence-semantic-error))",
+        },
+        glass: {
+          surface: "hsl(var(--essence-glass-surface))",
+          border: "hsl(var(--essence-glass-border))",
+        },
+        
+        // Shadcn Compatibility
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -65,10 +118,6 @@ export default {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
-        glass: {
-          surface: "hsl(var(--glass-surface))",
-          border: "hsl(var(--glass-border))",
-        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -80,14 +129,45 @@ export default {
       },
       boxShadow: {
         'xs': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
-        'sm': '0 2px 4px -1px rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.03)',
-        'DEFAULT': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
-        'md': '0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -2px rgba(0, 0, 0, 0.03)',
-        'lg': '0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03)',
+        'sm': 'var(--essence-shadows-sm)',
+        'md': 'var(--essence-shadows-md)',
+        'lg': 'var(--essence-shadows-lg)',
         'xl': '0 25px 50px -12px rgba(0, 0, 0, 0.12)',
         '2xl': '0 35px 60px -15px rgba(0, 0, 0, 0.15)',
         'inner': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.04)',
         'glass': '0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+      },
+      fontSize: {
+        // Essence v3.0 Typography Scale with Optical Letter Spacing
+        'caption-2': ['0.6875rem', { letterSpacing: '0.025em' }],  // 11px
+        'caption-1': ['0.75rem', { letterSpacing: '0.02em' }],     // 12px
+        'footnote': ['0.8125rem', { letterSpacing: '0.015em' }],   // 13px
+        'body-sm': ['0.875rem', { letterSpacing: '0.01em' }],      // 14px
+        'body': ['1rem', { letterSpacing: '0em' }],                // 16px
+        'subhead': ['1.125rem', { letterSpacing: '-0.005em' }],    // 18px
+        'title-3': ['1.25rem', { letterSpacing: '-0.01em' }],      // 20px
+        'title-2': ['1.5rem', { letterSpacing: '-0.015em' }],      // 24px
+        'title-1': ['1.875rem', { letterSpacing: '-0.02em' }],     // 30px
+        'large-title': ['2.25rem', { letterSpacing: '-0.025em' }], // 36px
+        'display': ['3rem', { letterSpacing: '-0.03em' }],         // 48px
+      },
+      fontWeight: {
+        light: '300',
+        regular: '400',
+        medium: '500',
+        semibold: '600',
+        bold: '700',
+        black: '900',
+      },
+      backdropBlur: {
+        sm: 'blur(8px)',
+        md: 'blur(16px)',
+        lg: 'blur(24px)',
+        xl: 'blur(40px)',
+      },
+      backdropSaturate: {
+        DEFAULT: 'saturate(180%)',
+        high: 'saturate(200%)',
       },
       keyframes: {
         "accordion-down": {
@@ -116,14 +196,25 @@ export default {
         },
       },
       animation: {
-        "accordion-down": "accordion-down 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-        "accordion-up": "accordion-up 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-        "fade-in": "fade-in 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-        "scale-in": "scale-in 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-        "slide-up": "slide-up 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+        "accordion-down": "accordion-down 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)",
+        "accordion-up": "accordion-up 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)",
+        "fade-in": "fade-in 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)",
+        "scale-in": "scale-in 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)",
+        "slide-up": "slide-up 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)",
         "shimmer": "shimmer 2s linear infinite",
       },
+      transitionDuration: {
+        '75': '75ms',
+        '150': '150ms',
+        '250': '250ms',
+        '400': '400ms',
+        '700': '700ms',
+      },
       transitionTimingFunction: {
+        'standard': 'cubic-bezier(0.4, 0.0, 0.2, 1)',
+        'decelerate': 'cubic-bezier(0.0, 0.0, 0.2, 1)',
+        'accelerate': 'cubic-bezier(0.4, 0.0, 1, 1)',
+        'dynamic': 'cubic-bezier(0.68, -0.6, 0.32, 1.6)',
         'apple': 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
       },
     },
