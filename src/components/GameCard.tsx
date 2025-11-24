@@ -31,9 +31,9 @@ const cn = (...classes: (string | boolean | undefined | null)[]): string => {
 const LOGO_SIZE = 40;
 
 // Helpers (Logic unchanged)
-const getEspnLogoUrl = (abbr: string, league: "NHL" | "NFL" | "NBA" = "NHL"): string => {
+const getEspnLogoUrl = (abbr: string, league: "NHL" | "NFL" | "NBA" | "Tennis" = "NHL"): string => {
   const code = abbr.toLowerCase();
-  const sportPath = league === "NHL" ? "nhl" : league === "NFL" ? "nfl" : "nba";
+  const sportPath = league === "NHL" ? "nhl" : league === "NFL" ? "nfl" : league === "NBA" ? "nba" : "tennis";
   const size = LOGO_SIZE * 2; // Retina optimization
   return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/${sportPath}/500/${code}.png&h=${size}&w=${size}&lossy=1`;
 };
@@ -56,7 +56,7 @@ const parseLine = (plString: string | undefined): { line: string; juice: string 
 interface TeamLogoProps {
   teamAbbr: string;
   teamName: string;
-  league: "NHL" | "NFL" | "NBA";
+  league: "NHL" | "NFL" | "NBA" | "Tennis";
 }
 
 const TeamLogo = React.memo(({ teamAbbr, teamName, league }: TeamLogoProps) => {

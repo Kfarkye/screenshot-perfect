@@ -36,6 +36,12 @@ const NFL_SUGGESTIONS = [
   { id: 'n3', label: "Prime Time", icon: TrendingUp, query: "Analyze the next Prime Time game. What are the key injuries and matchup edges?", desc: "TNF/SNF/MNF Analysis" },
 ];
 
+const TENNIS_SUGGESTIONS = [
+  { id: 't1', label: "Today's Matches", icon: Calendar, query: "Show me today's ATP/WTA matches with odds and value plays.", desc: "Full tournament coverage" },
+  { id: 't2', label: "Head-to-Head Edge", icon: TrendingUp, query: "Which matches have the strongest surface/H2H trends to exploit?", desc: "Historical matchup analysis" },
+  { id: 't3', label: "Live Betting", icon: Zap, query: "What are the key in-play betting strategies for today's tennis slate?", desc: "Live betting opportunities" },
+];
+
 type TabId = 'chat' | 'schedule';
 
 interface TabConfig {
@@ -202,7 +208,7 @@ interface OnboardingProps {
 }
 
 const OnboardingView = React.memo(({ onSuggestionClick, league }: OnboardingProps) => {
-  const suggestions = league === 'NHL' ? NHL_SUGGESTIONS : NFL_SUGGESTIONS;
+  const suggestions = league === 'NHL' ? NHL_SUGGESTIONS : league === 'NFL' ? NFL_SUGGESTIONS : league === 'Tennis' ? TENNIS_SUGGESTIONS : NHL_SUGGESTIONS;
   
   return (
     <div className="min-h-full flex flex-col items-center justify-center p-4 sm:p-6 text-center motion-safe:animate-slide-up-fade">

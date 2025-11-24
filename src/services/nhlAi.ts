@@ -71,6 +71,14 @@ const LEAGUE_CONFIG = {
       "Portland Trail Blazers": "POR", "Sacramento Kings": "SAC", "San Antonio Spurs": "SAS",
       "Toronto Raptors": "TOR", "Utah Jazz": "UTA", "Washington Wizards": "WAS"
     }
+  },
+  Tennis: {
+    key: 'tennis_atp',
+    spreadTerm: 'Set Spread',
+    sportName: 'Tennis',
+    statContext: "| ATP Rank | Surface | H2H |",
+    standingsUrl: '', // Tennis doesn't have standings
+    mapping: {} // Tennis uses player names directly
   }
 };
 
