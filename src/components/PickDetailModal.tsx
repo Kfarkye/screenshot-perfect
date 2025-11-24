@@ -103,20 +103,26 @@ Answer questions about this pick concisely and helpfully.`
         throw error;
       }
 
-      console.log('AI Router full response:', data);
+      console.log('AI Router full response type:', typeof data, data);
       
-      // The response is already processed by Supabase client
-      // It should just be a string with the complete response
+      // Supabase returns the actual response data directly when it's a stream
+      // For SSE streams, it may return the full text
       let responseText = '';
       
-      if (typeof data === 'string') {
+      if (!data) {
+        throw new Error('No response data received');
+      }
+      
+      // Check if it's a Response object that needs to be read
+      if (data instanceof Response) {
+        const text = await data.text();
+        console.log('Response text:', text);
+        responseText = text;
+      } else if (typeof data === 'string') {
         responseText = data;
       } else if (data && typeof data === 'object') {
         // Check various possible response formats
         responseText = data.response || data.content || data.text || JSON.stringify(data);
-      } else {
-        console.warn('Unexpected response format:', typeof data, data);
-        responseText = 'Sorry, I received an unexpected response format.';
       }
 
       const assistantMsg: ChatMessage = { 
