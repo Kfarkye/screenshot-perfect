@@ -389,65 +389,80 @@ export const initializeChat = (league: League): Chat => {
 const USE_ROUTER = true; // Set to true to use the edge function router
 
 const sendViaRouter = async (userMessage: string, league: League): Promise<string> => {
-  console.log('[Router] Using authenticated Supabase client...');
+  console.log('[Router] Preparing request...');
   const { supabase } = await import('@/integrations/supabase/client');
 
   const contextInjection = rawScheduleContext 
     ? `[SYSTEM INJECTION - CURRENT ${league} ODDS (Source: The Odds API)]:\n${rawScheduleContext}\n\n[USER]:\n${userMessage}`
     : userMessage;
 
-  console.log('[Router] Calling ai-chat-router function...');
-  const { data, error } = await supabase.functions.invoke('ai-chat-router', {
-    body: {
-      messages: [
-        { role: 'system', content: getSystemInstruction(league) },
-        { role: 'user', content: contextInjection }
-      ],
-      preferredProvider: 'gemini'
+  // Get the session for auth token
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Not authenticated');
+  }
+
+  console.log('[Router] Calling ai-chat-router function with streaming...');
+  
+  // Use fetch directly to handle SSE streaming
+  const response = await fetch(
+    `https://luohiaujigqcjpzicxiz.supabase.co/functions/v1/ai-chat-router`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA'
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: getSystemInstruction(league) },
+          { role: 'user', content: contextInjection }
+        ],
+        preferredProvider: 'gemini'
+      })
     }
-  });
+  );
 
-  if (error) {
-    console.error('[Router] Supabase function error:', error);
-    throw new Error(`Edge function error: ${error.message || JSON.stringify(error)}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  console.log('[Router] Function response:', data);
+  // Read the SSE stream
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+  let fullText = '';
 
-  if (!data) {
-    throw new Error('No data returned from edge function');
+  if (!reader) {
+    throw new Error('No response body reader available');
   }
 
-  // Handle streaming SSE response
-  if (typeof data === 'string') {
-    // Parse SSE format to extract text content
-    const lines = data.split('\n');
-    let fullText = '';
-    
-    for (const line of lines) {
-      if (line.startsWith('event: text')) {
-        continue;
-      }
-      if (line.startsWith('data: ')) {
-        const content = line.slice(6).trim();
-        if (content && content !== '[DONE]') {
-          fullText += content;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const jsonData = JSON.parse(line.slice(6));
+            if (jsonData.type === 'text' && jsonData.text) {
+              fullText += jsonData.text;
+            }
+          } catch (e) {
+            // Ignore parse errors for non-JSON lines
+          }
         }
       }
     }
-    
-    return fullText || 'No response received';
+  } finally {
+    reader.releaseLock();
   }
 
-  if (typeof data === 'object' && 'error' in data) {
-    throw new Error(`Edge function returned error: ${data.error}`);
-  }
-
-  if (typeof data === 'object' && 'response' in data) {
-    return data.response as string;
-  }
-
-  throw new Error(`Invalid response format: ${JSON.stringify(data)}`);
+  return fullText || 'No response received';
 };
 
 export const sendMessageToAI = async (userMessage: string, league: League = 'NHL'): Promise<string> => {
