@@ -373,9 +373,11 @@ You MUST use Markdown tables for all comparisons.
    - **Feature Matchup**: Deep dive on best game.
 
 **DATA HANDLING**:
-- Use injected Odds API context for prices.
-- Use googleSearch for injuries/trends.
-- NO HALLUCINATIONS.
+- Injected context shows recent/upcoming games but may not be exhaustive.
+- CRITICAL: If user asks for games/lines not in injected data, use googleSearch to find current lines, matchups, and analysis.
+- For Monday Night Football, prime time games, or any missing data: ALWAYS search first, never say "not available."
+- Use googleSearch for injuries, line movements, trends, and any current betting information.
+- NO HALLUCINATIONS - but actively search for real data when it's not injected.
 `;
 };
 
