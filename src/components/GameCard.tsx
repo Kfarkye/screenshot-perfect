@@ -292,12 +292,13 @@ interface GameCardProps {
 
 export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick }: GameCardProps) => {
   const { id, status, awayTeam, homeTeam, awayRecord, homeRecord, time, odds: allOdds, league } = game;
-  const [pickData, setPickData] = useState(game.pick);
-  const [isGeneratingPick, setIsGeneratingPick] = useState(false);
   const [showPickModal, setShowPickModal] = useState(false);
   const { toast } = useToast();
   const awayTeamName = awayTeam;
   const homeTeamName = homeTeam;
+  
+  // Use existing pick data from game
+  const pickData = game.pick;
 
   // State calculations (Logic unchanged)
   const isLive = status === "Live";
@@ -364,31 +365,20 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
     [onBetClick, id, odds, boardLocked],
   );
 
-  const handleGeneratePick = useCallback(
-    async (e: React.MouseEvent) => {
+  const handleOpenBreakdown = useCallback(
+    (e: React.MouseEvent) => {
       e.stopPropagation();
-
       if (boardLocked) {
         toast({
           title: "Markets Closed",
-          description: "Cannot generate picks for concluded games.",
+          description: "No analysis available for concluded games.",
           variant: "destructive",
         });
         return;
       }
-      setIsGeneratingPick(true);
-      try {
-        const pick = await generatePick(game, "moneyline");
-        setPickData(pick);
-        toast({ title: "Pick Generated", description: `${pick.confidence_score}% confidence on ${pick.pick_side}` });
-      } catch (error) {
-        observability.logError(error, "GameCard:handleGeneratePick");
-        toast({ title: "Generation Failed", description: "Could not generate pick", variant: "destructive" });
-      } finally {
-        setIsGeneratingPick(false);
-      }
+      setShowPickModal(true);
     },
-    [game, boardLocked, toast],
+    [boardLocked, toast],
   );
 
   // ESSENCE v3.0 Implementation: Glass Materiality for the main card.
@@ -507,26 +497,46 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
                 </button>
               )}
 
-              {/* ESSENCE Button Style: Primary Variant for main CTA */}
-              <button
-                onClick={handleGeneratePick}
-                disabled={isGeneratingPick || boardLocked}
-                // Primary Variant
-                className="bg-accent text-content-inverse hover:bg-accent-hover px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard disabled:opacity-50 disabled:pointer-events-none"
-              >
-                {isGeneratingPick ? (
-                  <>
-                    {/* Simple CSS spinner */}
-                    <div className="w-4 h-4 border-2 border-content-inverse/30 border-t-content-inverse rounded-full animate-spin" />
-                    <span className="text-body-sm font-bold">Generating...</span>
-                  </>
-                ) : (
-                  <>
+              {/* Edge Display & Breakdown Button */}
+              {pickData && (
+                <div className="flex items-center gap-3">
+                  {/* Edge Indicator */}
+                  <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-glass-surface/50 border border-accent/30">
+                    <TrendingUp size={16} className="text-accent" />
+                    <div className="flex flex-col">
+                      <span className="text-caption-2 text-content-secondary uppercase tracking-wider font-semibold">
+                        Edge
+                      </span>
+                      <span className="text-body font-bold font-mono text-accent">
+                        {pickData.confidence_score}%
+                      </span>
+                    </div>
+                    <div className="h-6 w-px bg-border/50 mx-1" />
+                    <span className="text-body-sm font-semibold text-content-primary">
+                      {pickData.pick_side}
+                    </span>
+                  </div>
+
+                  {/* Breakdown Button */}
+                  <button
+                    onClick={handleOpenBreakdown}
+                    disabled={boardLocked}
+                    className="bg-accent text-content-inverse hover:bg-accent-hover px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard disabled:opacity-50 disabled:pointer-events-none"
+                  >
                     <Sparkles size={16} strokeWidth={2.5} />
-                    <span className="text-body-sm font-bold">Get Pick</span>
-                  </>
-                )}
-              </button>
+                    <span className="text-body-sm font-bold">Breakdown</span>
+                  </button>
+                </div>
+              )}
+
+              {/* No Edge Available */}
+              {!pickData && !boardLocked && (
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-glass-surface/30 border border-border/30">
+                  <span className="text-body-sm text-content-secondary">
+                    No edge identified
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -650,29 +660,13 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
         </div>
       </div>
 
-      {/* Pick Display Section (if applicable) - Shown below the main content */}
-      {/* Note: PickDisplay component styling is assumed to be handled separately */}
-      {!isConcluded && (pickData || isGeneratingPick) && (
-        <div className="p-6 relative z-10 border-t border-glass-border">
-          {isGeneratingPick ? (
-            <PickDisplay pick={{} as any} isLoading />
-          ) : pickData ? (
-            <PickDisplay pick={pickData} onClick={() => setShowPickModal(true)} />
-          ) : null}
-        </div>
-      )}
-
       {/* Pick Detail Modal (Portal) */}
       {pickData && (
         <PickDetailModal
           pick={pickData}
+          game={game}
           isOpen={showPickModal}
           onClose={() => setShowPickModal(false)}
-          gameInfo={{
-            awayTeam: game.awayTeam,
-            homeTeam: game.homeTeam,
-            time: game.time,
-          }}
         />
       )}
     </article>
