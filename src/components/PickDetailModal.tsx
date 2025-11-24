@@ -105,23 +105,36 @@ Answer questions about this pick concisely and helpfully.`
 
       console.log('AI Router full response type:', typeof data, data);
       
-      // Supabase returns the actual response data directly when it's a stream
-      // For SSE streams, it may return the full text
       let responseText = '';
       
       if (!data) {
         throw new Error('No response data received');
       }
       
-      // Check if it's a Response object that needs to be read
+      // Parse SSE stream if it's a Response object
       if (data instanceof Response) {
         const text = await data.text();
-        console.log('Response text:', text);
-        responseText = text;
+        console.log('Raw SSE response:', text);
+        
+        // Parse SSE format: extract text from "event: text" lines
+        const lines = text.split('\n');
+        const textChunks: string[] = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (line.startsWith('event: text')) {
+            // Next line should be the data
+            const nextLine = lines[i + 1]?.trim();
+            if (nextLine?.startsWith('data: ')) {
+              textChunks.push(nextLine.substring(6)); // Remove "data: " prefix
+            }
+          }
+        }
+        
+        responseText = textChunks.join('');
       } else if (typeof data === 'string') {
         responseText = data;
       } else if (data && typeof data === 'object') {
-        // Check various possible response formats
         responseText = data.response || data.content || data.text || JSON.stringify(data);
       }
 
