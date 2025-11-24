@@ -1,22 +1,8 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import type { GameData, MarketData, PickData } from "../types";
-import {
-  Clock,
-  TrendingUp,
-  Activity,
-  Lock,
-  ArrowUp,
-  ArrowDown,
-  AlertTriangle,
-  MessageSquare,
-  Send,
-  X,
-  ChevronRight,
-} from "lucide-react";
 // PickDisplay and PickDetailModal are defined later in the file for cohesive updates
 // import { PickDisplay } from "./PickDisplay";
 // import { PickDetailModal } from "./PickDetailModal";
-import { generatePick } from "../services/pickGenerator";
 import { useToast } from "../hooks/use-toast";
 // Assuming these UI components are available in the project based on the original code context
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -194,23 +180,27 @@ const OddsCell = React.memo(
           isInteractive && "focus-visible:ring-2 focus-visible:ring-accent focus-visible:z-10",
         )}
       >
+        {/* Movement Indicator - text badge instead of icon */}
+        {movement !== "none" && isInteractive && (
+          <div
+            className={cn(
+              "absolute left-1.5 top-1.5 z-10 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tracking-wide",
+              movement === "up"
+                ? "bg-semantic-success/15 text-semantic-success"
+                : "bg-semantic-error/15 text-semantic-error",
+            )}
+            aria-hidden="true"
+          >
+            {movement === "up" ? "UP" : "DOWN"}
+          </div>
+        )}
+
         {/* Subtle shimmer effect on hover (Enhances materiality) */}
         {isInteractive && (
           <div
             className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 dark:via-white/5 to-transparent opacity-0 group-hover/odds:opacity-100 group-hover/odds:translate-x-full transition-all duration-700 -translate-x-full"
             aria-hidden="true"
           />
-        )}
-
-        {/* Movement Indicator */}
-        {movement !== "none" && isInteractive && (
-          <div className="absolute left-1.5 top-1.5 z-10" aria-hidden="true">
-            {movement === "up" ? (
-              <ArrowUp size={11} className="text-semantic-success" strokeWidth={3} />
-            ) : (
-              <ArrowDown size={11} className="text-semantic-error" strokeWidth={3} />
-            )}
-          </div>
         )}
 
         {/* Main Line/Odds - Typography: SF Mono (font-mono), body (16px), tabular-nums */}
@@ -255,14 +245,14 @@ interface StatusBadgeProps {
 const StatusBadge = React.memo(({ status, time }: StatusBadgeProps) => {
   switch (status) {
     case "Live":
-      // ESSENCE Live Indicator: Semantic Error (Red) for high visibility.
+      // ESSENCE Live Indicator: Pulsing pill with text.
       return (
         <div
           className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-semantic-error/15 border border-semantic-error/30 shadow-sm backdrop-blur-sm"
           role="status"
           aria-label="Game is live"
         >
-          <Activity size={12} className="text-semantic-error motion-safe:animate-pulse" strokeWidth={3} />
+          <span className="inline-flex h-2 w-2 rounded-full bg-semantic-error animate-pulse" />
           {/* Typography: caption-1 (12px) */}
           <span className="text-caption-1 font-bold text-semantic-error tracking-wider uppercase">Live</span>
         </div>
@@ -277,7 +267,6 @@ const StatusBadge = React.memo(({ status, time }: StatusBadgeProps) => {
       // ESSENCE Warning Indicator: Semantic Warning (Amber).
       return (
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-semantic-warning/20 border border-semantic-warning/40 backdrop-blur-sm">
-          <AlertTriangle size={12} className="text-semantic-warning" />
           {/* Typography: caption-2 (11px) */}
           <span className="text-caption-2 font-bold text-semantic-warning tracking-wider uppercase">
             {status === "Postponed" ? "PPD" : status}
@@ -288,7 +277,6 @@ const StatusBadge = React.memo(({ status, time }: StatusBadgeProps) => {
       // Default Time Display: content-secondary, SF Mono for time.
       return (
         <div className="flex items-center gap-2 text-content-secondary hover:text-content-primary transition-colors duration-150 ease-standard">
-          <Clock size={14} />
           {/* Typography: body-sm (14px) */}
           <span className="text-body-sm font-medium font-mono tracking-tight">{time} ET</span>
         </div>
@@ -298,7 +286,7 @@ const StatusBadge = React.memo(({ status, time }: StatusBadgeProps) => {
 StatusBadge.displayName = "StatusBadge";
 
 // ============================================================================
-// PICK DETAIL MODAL COMPONENT - ESSENCE v3.1 Premium Redesign
+// PICK DETAIL MODAL COMPONENT - ESSENCE v3.1 Premium Redesign (Iconless)
 // ============================================================================
 
 interface PickDetailModalProps {
@@ -418,7 +406,7 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
 
               {/* AI Chat Toggle Button - ESSENCE Glass/Accent Toggle for premium interaction */}
               <Button
-                variant="ghost" // Using ghost as base, customizing appearance
+                variant="ghost"
                 onClick={() => setShowAIChat(!showAIChat)}
                 className={cn(
                   "gap-2.5 text-body-sm font-bold px-5 py-2.5 rounded-xl transition-all duration-150 ease-standard",
@@ -430,8 +418,9 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
                     "bg-accent text-content-inverse hover:bg-accent-hover shadow-md border border-transparent",
                 )}
               >
-                {/* Using X when active for clear state indication */}
-                {showAIChat ? <X size={16} strokeWidth={2.5} /> : <MessageSquare size={16} strokeWidth={2.5} />}
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current text-[10px] font-bold">
+                  {showAIChat ? "×" : "AI"}
+                </span>
                 {showAIChat ? "Close Chat" : "AI Insights"}
               </Button>
             </DialogTitle>
@@ -484,7 +473,7 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
                 </div>
               </div>
 
-              {/* Key Metrics Grid - Clean, Data-Forward (No Icons for minimalism) */}
+              {/* Key Metrics Grid - Clean, Data-Forward */}
               <div className="grid grid-cols-2 gap-6 mb-8">
                 {/* Metric Box: Expected Value */}
                 <div className="p-6 rounded-xl bg-glass-surface/50 border border-glass-border shadow-sm backdrop-blur-sm">
@@ -549,7 +538,7 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
 
               {/* Timestamp */}
               <div className="flex items-center gap-2 text-caption-2 text-content-tertiary pt-8 mt-8 border-t border-glass-border">
-                <Clock size={12} strokeWidth={2} />
+                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-content-tertiary" />
                 <span>Generated {new Date(pick.created_at).toLocaleString()}</span>
               </div>
             </ScrollArea>
@@ -559,7 +548,9 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
               <div className="w-full lg:w-1/3 border-l border-glass-border flex flex-col bg-surface-secondary/20">
                 <div className="p-5 border-b border-glass-border">
                   <h3 className="font-semibold text-body-sm text-content-primary flex items-center gap-2">
-                    <MessageSquare size={16} className="text-accent" strokeWidth={2.5} />
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent/10 text-[11px] font-semibold text-accent">
+                      AI
+                    </span>
                     Ask AI Insights
                   </h3>
                   <p className="text-caption-1 text-content-secondary mt-1">
@@ -589,9 +580,11 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
                       </div>
                     ))}
                     {isAILoading && (
-                      // Using a more subtle loading indicator (Activity spinner)
+                      // Subtle loading indicator (animated shimmer)
                       <div className="flex items-center gap-2 p-4 rounded-xl bg-glass-surface text-content-secondary mr-8 border border-glass-border">
-                        <Activity size={14} className="text-accent animate-spin" />
+                        <span className="relative inline-flex h-1.5 w-8 overflow-hidden rounded-full bg-surface-secondary/60">
+                          <span className="absolute inset-y-0 w-1/2 bg-accent/40 animate-[shimmer_1.2s_infinite]" />
+                        </span>
                         <span>Analyzing...</span>
                       </div>
                     )}
@@ -618,10 +611,9 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
                     <Button
                       onClick={handleSendMessage}
                       disabled={!inputMessage.trim() || isAILoading}
-                      size="icon"
-                      className="shrink-0 bg-accent hover:bg-accent-hover text-content-inverse rounded-xl"
+                      className="shrink-0 bg-accent hover:bg-accent-hover text-content-inverse rounded-xl px-4 text-body-sm font-semibold disabled:opacity-60"
                     >
-                      <Send size={16} strokeWidth={2.5} />
+                      Send
                     </Button>
                   </div>
                 </div>
@@ -635,7 +627,7 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
 };
 
 // ============================================================================
-// GAME CARD COMPONENT - ESSENCE v3.1 Unified Interaction
+// GAME CARD COMPONENT - ESSENCE v3.1 Unified Interaction (Iconless)
 // ============================================================================
 
 interface GameCardProps {
@@ -827,14 +819,15 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
           {!isConcluded && (
             // Increased gap to 3 for better spacing
             <div className="absolute bottom-6 right-6 flex gap-3 opacity-0 motion-safe:translate-y-3 group-hover/card:opacity-100 group-hover/card:motion-safe:translate-y-0 transition-all duration-400 ease-decelerate focus-within:opacity-100 focus-within:translate-y-0">
-              {/* Analyze Button (Unchanged) */}
+              {/* Analyze Button */}
               {onAnalyze && (
                 <button
                   onClick={handleAnalyzeClick}
-                  // Increased py from 2.5 to 3 for better height alignment with the new unified button
                   className="bg-glass-surface backdrop-blur-lg border border-glass-border hover:shadow-md text-content-primary px-5 py-3 rounded-xl flex items-center gap-2.5 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard"
                 >
-                  <TrendingUp size={16} strokeWidth={2.5} className="text-accent" />
+                  <span className="text-caption-1 font-semibold uppercase tracking-widest text-content-secondary">
+                    Edge Scan
+                  </span>
                   <span className="text-body-sm font-bold">Analyze</span>
                 </button>
               )}
@@ -844,8 +837,6 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
                 <button
                   onClick={handleOpenBreakdown}
                   disabled={boardLocked}
-                  // A premium, emphasized button combining the edge info and the action.
-                  // Uses the accent color, maintaining high saturation and materiality.
                   className="group/edgebutton bg-accent hover:bg-accent-hover text-content-inverse px-5 py-3 rounded-xl shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard disabled:opacity-50 disabled:pointer-events-none flex items-center gap-4 backdrop-saturate-150"
                 >
                   {/* Edge visualization */}
@@ -866,12 +857,10 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
                     <span className="text-body font-bold">{pickData.pick_side}</span>
                   </div>
 
-                  {/* Subtle Icon/Indicator for interaction, emphasizing movement on hover */}
-                  <ChevronRight
-                    size={16}
-                    strokeWidth={3}
-                    className="ml-2 text-content-inverse/70 group-hover/edgebutton:text-content-inverse transition-transform duration-200 ease-standard group-hover/edgebutton:translate-x-1"
-                  />
+                  {/* Subtle Indicator for interaction */}
+                  <span className="ml-2 text-caption-2 font-semibold tracking-wider text-content-inverse/70 group-hover/edgebutton:text-content-inverse transition-transform duration-200 ease-standard group-hover/edgebutton:translate-x-1">
+                    VIEW
+                  </span>
                 </button>
               )}
 
@@ -885,12 +874,14 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
           )}
         </div>
 
-        {/* Odds Board Section (Unchanged) */}
+        {/* Odds Board Section */}
         <div className="relative bg-surface-secondary/30 p-6 md:w-[380px] flex flex-col justify-center border-t md:border-t-0 md:border-l border-glass-border">
           {/* Locked Board Overlay */}
           {boardLocked && (
             <div className="absolute inset-0 bg-surface-primary/50 backdrop-blur-sm z-20 flex items-center justify-center flex-col gap-3 px-6">
-              <Lock size={20} className="text-content-secondary" />
+              <div className="px-3 py-1 rounded-full border border-content-secondary/40 text-caption-2 font-semibold uppercase tracking-widest text-content-secondary">
+                Markets Locked
+              </div>
               {isConcluded ? (
                 <div className="text-center space-y-2">
                   <p className="text-caption-1 font-bold text-accent uppercase tracking-wider">Final Score</p>
@@ -1016,7 +1007,7 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
 GameCard.displayName = "GameCard";
 
 // ============================================================================
-// PICK DISPLAY COMPONENT - ESSENCE v3.1 Alignment
+// PICK DISPLAY COMPONENT - ESSENCE v3.1 Alignment (Iconless)
 // ============================================================================
 
 interface PickDisplayProps {
@@ -1074,11 +1065,9 @@ export const PickDisplay: React.FC<PickDisplayProps> = ({ pick, isLoading = fals
             {pick.confidence_score}%
           </div>
           {/* Refined interaction cue */}
-          <ChevronRight
-            size={16}
-            className="text-content-tertiary group-hover:text-content-primary transition-all duration-200 ease-standard group-hover:translate-x-0.5"
-            strokeWidth={3}
-          />
+          <span className="text-caption-1 font-semibold tracking-wider text-content-tertiary group-hover:text-content-primary transition-all duration-200 ease-standard group-hover:translate-x-0.5">
+            VIEW
+          </span>
         </div>
       </div>
 
