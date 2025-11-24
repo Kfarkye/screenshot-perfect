@@ -387,7 +387,11 @@ const App: React.FC = () => {
         });
       }
 
-      // Get AI response
+      // Fetch today's schedule first to populate context
+      const { fetchSchedule } = await import('./services/nhlAi');
+      await fetchSchedule(activeLeague, new Date());
+      
+      // Get AI response (now with real data in context)
       const responseText = await sendMessageToAI(trimmedContent, activeLeague);
       
       if (activeRequestRef.current !== requestId) return;
