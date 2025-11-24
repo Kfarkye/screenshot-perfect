@@ -9,12 +9,22 @@ const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 // Security: Keep USE_ROUTER true for production to protect API keys and enable server-side tools.
 const USE_ROUTER = true;
 const SPORTS_TIMEZONE = "America/New_York"; // Define the timezone for the "sports day"
-const PREFERRED_BOOKMAKERS = ["draftkings", "fanduel", "betmgm", "williamhill_us", "caesars", "williamhill"];
+// Prioritize the most liquid US books
+const PREFERRED_BOOKMAKERS = [
+  "draftkings",
+  "fanduel",
+  "betmgm",
+  "williamhill_us",
+  "caesars",
+  "williamhill",
+  "pointsbetus",
+];
 
 // --- ENVIRONMENT HANDLING ---
 
-// Hardcoded Supabase configuration
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA";
+// Hardcoded Supabase configuration (NOTE: Ideally move to environment variables in production, e.g., NEXT_PUBLIC_...)
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA";
 const API_BASE_URL = "https://luohiaujigqcjpzicxiz.supabase.co/functions/v1/ai-chat-router";
 // For client-side fallback only (not used when USE_ROUTER is true)
 const CLIENT_GEMINI_API_KEY = "";
@@ -79,7 +89,7 @@ interface CacheEntry {
 
 // --- GLOBAL STATE & CACHE ---
 
-// Use Map for efficient caching
+// Use Map for efficient caching (in-memory, scoped to the user's session/window)
 const oddsCache = new Map<string, CacheEntry>();
 let rawScheduleContext: string = "";
 let currentLeagueContext: League = "NHL";
@@ -89,8 +99,8 @@ let chatInstance: ChatSession | null = null;
 let genAIInstance: GoogleGenerativeAI | null = null;
 let lastLeagueContext: League | null = null;
 
+// NOTE: Mappings (team name to abbreviation) are assumed to be populated in the actual implementation.
 const LEAGUE_CONFIG = {
-  // ... (LEAGUE_CONFIG mappings remain the same, omitted for brevity)
   NHL: {
     key: "icehockey_nhl",
     spreadTerm: "Puck Line",
@@ -104,7 +114,8 @@ const LEAGUE_CONFIG = {
     key: "americanfootball_nfl",
     spreadTerm: "Spread",
     sportName: "NFL Football",
-    statContext: "| PTS/G | YDS/G | Pass Yds | Rush Yds |",
+    // Enhanced context for AI to understand key numbers
+    statContext: "| PTS/G | YDS/G | Pass Yds | Rush Yds | Key Numbers: 3, 7, 10 |",
     mapping: {
       /* ... */
     },
@@ -113,7 +124,8 @@ const LEAGUE_CONFIG = {
     key: "basketball_nba",
     spreadTerm: "Spread",
     sportName: "NBA Basketball",
-    statContext: "| PTS/G | PA/G | FG% | 3P% |",
+    // Enhanced context for AI (e.g., Pace)
+    statContext: "| PTS/G | PA/G | FG% | 3P% | Pace |",
     mapping: {
       /* ... */
     },
@@ -141,8 +153,9 @@ const invokeSupabaseFunction = async <T,>(functionName: string, body: object): P
 };
 
 const getAbbr = (name: string, league: League): string => {
-  // Type assertion is safe here as mappings contain dynamic keys (team names)
-  const map = LEAGUE_CONFIG[league].mapping as Record<string, string>;
+  // Type assertion is used here as mappings contain dynamic keys (team names)
+  // Ensure 'mapping' exists even if empty.
+  const map = (LEAGUE_CONFIG[league].mapping || {}) as Record<string, string>;
   return map[name] || name.substring(0, 3).toUpperCase();
 };
 
@@ -302,11 +315,14 @@ export const fetchSchedule = async (league: League = "NHL", targetDate: Date = n
   }
 
   // 2. Calculate "Days From" (Required by The Odds API for lookahead window)
-  // This calculation helps the backend determine the window to query.
+  // Robust calculation by normalizing to the start of the day to handle timezone boundaries accurately.
   const today = new Date();
-  const diffTime = targetDate.getTime() - today.getTime();
-  // Calculate days difference, ensuring at least 1 day window if target is today or future.
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const targetDateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+
+  const diffTime = targetDateStart.getTime() - todayStart.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  // If the target date is today or in the future, we need a window of at least 1 day.
   const daysFrom = diffDays >= 0 ? diffDays + 1 : 1; // Default to 1 for past dates, relying on dateKey parameter
 
   try {
@@ -346,8 +362,13 @@ export const fetchSchedule = async (league: League = "NHL", targetDate: Date = n
       const existingGame = gameMap.get(scoreGame.id);
       let status: "Scheduled" | "Live" | "Final" | "Postponed" | "Canceled" = "Scheduled";
 
-      if (scoreGame.completed) status = "Final";
-      else if (scoreGame.scores && scoreGame.scores.length > 0) status = "Live";
+      if (scoreGame.completed) {
+        status = "Final";
+      }
+      // Heuristic for 'Live': Game has started (commence_time < now) OR has scores, and is not completed.
+      else if (new Date(scoreGame.commence_time) < new Date() || (scoreGame.scores && scoreGame.scores.length > 0)) {
+        status = "Live";
+      }
 
       // CRITICAL: Prefer existing bookmakers (richer data) if available
       const bookmakers = existingGame?.bookmakers || scoreGame.bookmakers || [];
@@ -370,9 +391,6 @@ export const fetchSchedule = async (league: League = "NHL", targetDate: Date = n
       .filter((game) => {
         // Robust Filtering: Ensure the game commencement time falls on the target date in the defined timezone.
         const gameDateKey = getDateKeyInTZ(new Date(game.commence_time));
-
-        // Note: The original custom NFL logic (checking a 24h window) is removed here for consistency
-        // in filtering strictly by the selected calendar day (ET).
         return gameDateKey === dateKey;
       })
       .map((game) => {
@@ -476,6 +494,10 @@ const generateContextString = (games: GameData[], league: League): string => {
 
 // --- AI LOGIC & PROMPTING ---
 
+/**
+ * Defines the System Instruction for the AI Analyst.
+ * Combines narrative insight with rigorous market analysis.
+ */
 const getSystemInstruction = (league: League): string => {
   const config = LEAGUE_CONFIG[league];
   const today = new Date().toLocaleDateString("en-US", {
@@ -485,59 +507,49 @@ const getSystemInstruction = (league: League): string => {
     timeZone: SPORTS_TIMEZONE,
   });
 
+  // This prompt is designed to elicit the specific persona and analytical rigor required.
   return `
-You are an elite market analyst executing the role of a Senior Risk Manager at Circa Sports. You are known for setting the sharpest lines in the industry.
+You are an elite market analyst, combining the narrative insight of a top broadcaster (like Colin Cowherd) with the rigorous precision of a Senior Risk Manager at Circa Sports.
 
 CONTEXT: Date: ${today} | League: ${league} | Sport: ${config.sportName}
 
 # Core Principles
-Your analysis must adhere strictly to the following principles:
-1. **Game Context First:** Begin with critical game information (injuries, trends, storylines) before analyzing the market. This should read like a Colin Cowherd breakdown—narrative-driven but analytical.
-2. **Price-Driven:** Focus on market odds, line movement, liquidity, and market dynamics. Analyze THE MARKET as a unified entity, not individual sportsbook prices.
-3. **High-Signal:** Every sentence must deliver maximum information density. Zero filler language.
-4. **Professional Aesthetic:** Clean, pristine Markdown formatting resembling a high-end financial interface.
+1.  **Narrative Meets Numbers:** Blend critical game context (injuries, situational spots, trends) with sharp market analysis. The narrative sets the stage; the market data defines the edge.
+2.  **Price-Driven, Not Vibes-Driven:** Focus exclusively on odds, liquidity, CLV (Closing Line Value), and RLM (Reverse Line Movement). Analyze THE MARKET as a unified entity.
+3.  **High-Signal & Minimalist:** Zero filler language. Be confident, direct, and decisive.
+4.  **Elite Aesthetic:** Your output must be pristine Markdown, resembling a high-end financial interface (Apple/Robinhood).
 
-# Analytical Focus
-When analyzing data, prioritize these concepts:
-- **CLV (Closing Line Value):** Assessing the value of the current price against the likely closing line.
-- **RLM (Reverse Line Movement):** Identifying when the line moves opposite to public betting percentages.
-- **Key Numbers:** Recognizing the significance of movement through crucial points (e.g., 3, 7 in football).
-- **Handle vs. Ticket Count:** Differentiating between total money wagered (sharp indicator) and the number of bets placed (public indicator).
-- **Market Resistance:** Identifying price points where buyback occurs and equilibrium is found.
+# Constraints
+*   No emojis.
+*   No hype or sensational language.
+*   No conversational filler or hedging (e.g., "maybe," "it seems").
+*   Do NOT compare prices between individual sportsbooks (e.g., "DraftKings has -110 but FanDuel has -105"). Treat the market holistically using the injected data as consensus.
+*   If data is missing, state clearly: "Market currently off the board."
 
 # Mandatory Output Format
-You must strictly adhere to the following Markdown structure:
+You must strictly adhere to the following structure.
 
 # Game Context
-Start with the critical information a sharp bettor needs to know: key injuries, recent trends, situational spots, and any unique angles about this matchup. This should be narrative-driven, analytical, and compelling. Focus on what makes this game different or interesting from a betting perspective.
+Set the stage with the critical narrative. Identify the key injuries, situational advantages/disadvantages, and recent performance trends that matter most. This section must be compelling, analytical, and concise—identifying *why* this matchup presents a unique betting scenario.
 
 # Market Read
-A concise, high-signal summary of the overall market situation for this game. What is the market telling us?
+A one-sentence, high-signal summary of the overall market situation. What is the prevailing sentiment and where is the resistance?
 
 # Line Movement
-Explain what the numbers actually say and why they matter. Focus on opening lines, movement through key numbers, and current equilibrium. Analyze THE MARKET as a whole—do not compare individual sportsbook prices.
+Explain the tape. Detail the opening line (if known/inferable), significant movements (especially through key numbers, if applicable), and where the market has found equilibrium. Explain *why* the line moved (e.g., sharp action, injury news, overreaction).
 
 # Sharp vs Public
-Clean separation between where the market liquidity (handle) is leaning vs where the public consensus (ticket count) is implied. Identify discrepancies and RLM.
+Identify the divergence. Contrast the public consensus (ticket count) with the respected money (handle). Highlight any Reverse Line Movement (RLM) and explain where the professional liability is positioned.
 
 # Edge Analysis
-Clear reasoning behind the edge, based only on pricing, liquidity, movement history, and sharp analytics (CLV/RLM). Connect the game context to the market position.
+Synthesize the analysis. Connect the Game Context to the Market Data. Define the edge based purely on CLV, market inefficiencies, and sharp positioning. Why is the current price exploitable?
 
 # Final Position
 One sentence summarizing the actionable market position and pick.
 
-# Constraints
-- No emojis
-- No hype or sensational language
-- No conversational filler (e.g., "Let's take a look," "It seems that")
-- No hedging (e.g., "maybe," "possibly"). Be decisive.
-- Do NOT compare prices between different sportsbooks
-- Analyze the market as a unified entity
-- If data is missing, state clearly: "Market currently off the board"
-
 # Data Context
 Statistical context to consider: ${config.statContext}
-Use the provided game data for all lines, scores, and context. Do not hallucinate information.
+Use the provided [SYSTEM INJECTION] data for all lines, scores, and context. Do not hallucinate information.
 `;
 };
 
@@ -564,18 +576,17 @@ export const initializeChat = (league: League): ChatSession => {
     // Inform the AI if search tools are likely unavailable client-side (standard SDK limitation)
     if (!USE_ROUTER) {
       systemInstruction +=
-        "\n\n[CLIENT MODE LIMITATION]: Real-time 'googleSearch' is unavailable. Rely strictly on injected data. If information is missing, state that real-time lookups are disabled.";
+        "\n\n[CLIENT MODE LIMITATION]: Real-time 'googleSearch' or external lookups are unavailable. Rely strictly on injected data. If information (e.g., injuries, opening lines) is missing, state that real-time lookups are disabled.";
     }
 
     const model = ai.getGenerativeModel({
       model: "gemini-1.5-pro-latest",
       systemInstruction: systemInstruction,
-      // Tools configuration might vary based on SDK version and environment support
     });
 
     // Start a new chat session
     chatInstance = model.startChat({
-      generationConfig: { temperature: 0.5 }, // Lower temperature for analytical precision
+      generationConfig: { temperature: 0.5 }, // Balanced temperature for analytical precision and narrative flow
     });
     lastLeagueContext = league;
     return chatInstance;
@@ -589,8 +600,14 @@ export const initializeChat = (league: League): ChatSession => {
 
 /**
  * Sends the message via the AI Router (Supabase Edge Function) and handles the SSE stream response.
+ * @param onChunk Optional callback to handle real-time stream updates.
  */
-const sendViaRouter = async (userMessage: string, history: Message[], league: League): Promise<string> => {
+const sendViaRouter = async (
+  userMessage: string,
+  history: Message[],
+  league: League,
+  onChunk?: (chunk: string) => void,
+): Promise<string> => {
   if (!SUPABASE_ANON_KEY) throw new Error("Missing Supabase Configuration");
 
   // 1. Authentication Check
@@ -605,7 +622,7 @@ const sendViaRouter = async (userMessage: string, history: Message[], league: Le
     : userMessage;
 
   // 3. History Formatting (for edge function format: {role, content})
-  // The edge function expects messages with role and content (not parts array)
+  // The edge function expects messages with role and content (not the 'parts' array used by some SDKs)
   const formattedHistory = history.map((msg) => ({
     role: msg.role === "user" ? "user" : "assistant",
     content: msg.content,
@@ -613,26 +630,26 @@ const sendViaRouter = async (userMessage: string, history: Message[], league: Le
 
   // 4. Construct Payload - edge function expects {role, content} format
   const messages = [
+    // Include system instruction as the first message.
     { role: "system", content: getSystemInstruction(league) },
     ...formattedHistory,
-    { role: "user", content: contextInjection }
+    { role: "user", content: contextInjection },
   ];
 
   const payload = {
     messages: messages,
     mode: "chat",
     preferredProvider: "gemini",
+    stream: true, // Explicitly request streaming from the backend router
   };
-
-  console.log("[AI Router] Sending payload:", JSON.stringify(payload, null, 2));
 
   // 5. API Request
   const response = await fetch(API_BASE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`, // User JWT
+      apikey: SUPABASE_ANON_KEY, // Supabase Anon Key
     },
     body: JSON.stringify(payload),
   });
@@ -645,8 +662,6 @@ const sendViaRouter = async (userMessage: string, history: Message[], league: Le
   if (!response.body) throw new Error("No response body from Router");
 
   // 6. Robust SSE Stream Parsing
-  // NOTE: This buffers the stream before returning the full text.
-  // For true streaming UX in the frontend, this function should yield chunks or use a callback.
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let fullText = "";
@@ -659,7 +674,7 @@ const sendViaRouter = async (userMessage: string, history: Message[], league: Le
 
       buffer += decoder.decode(value, { stream: true });
 
-      // Process buffer line by line (SSE standard)
+      // Process buffer line by line (SSE standard: "data: <json>\n\n")
       let lineEndIndex;
       while ((lineEndIndex = buffer.indexOf("\n")) !== -1) {
         const line = buffer.slice(0, lineEndIndex).trim();
@@ -668,20 +683,23 @@ const sendViaRouter = async (userMessage: string, history: Message[], league: Le
         if (line === "" || !line.startsWith("data: ")) continue;
 
         const dataStr = line.slice(6).trim();
-        if (dataStr === "[DONE]") break;
+        if (dataStr === "[DONE]") break; // Standard stream termination signal
 
         try {
           // Handle JSON chunks (common for AI streams)
           if (dataStr.startsWith("{")) {
             const jsonData = JSON.parse(dataStr);
-            // Extract text from common formats (Gemini/OpenAI compatibility)
+            // Extract text from common formats (Gemini/OpenAI compatibility expected from router)
             const textChunk = jsonData.text || jsonData.content || jsonData.choices?.[0]?.delta?.content || "";
-            if (typeof textChunk === "string") {
+            if (typeof textChunk === "string" && textChunk) {
               fullText += textChunk;
+              if (onChunk) onChunk(textChunk); // Update UI in real-time
             }
           } else {
             // Fallback for raw text chunks
-            fullText += dataStr + " ";
+            const textChunk = dataStr + " ";
+            fullText += textChunk;
+            if (onChunk) onChunk(textChunk); // Update UI in real-time
           }
         } catch (e) {
           // Log parsing errors but continue processing the stream
@@ -703,25 +721,27 @@ const sendViaRouter = async (userMessage: string, history: Message[], league: Le
 // --- UNIFIED MESSAGE HANDLER ---
 
 /**
- * Sends a message to the AI analyst, handling routing, context injection, and history.
+ * Sends a message to the AI analyst, handling routing, context injection, history, and streaming.
  * @param userMessage The user's input string.
  * @param history The previous conversation history (required for multi-turn).
  * @param league The currently active sports league.
+ * @param onChunk Optional callback to handle real-time stream updates (for streaming UX).
  */
 export const sendMessageToAI = async (
   userMessage: string,
   history: Message[] = [],
   league: League = "NHL",
+  onChunk?: (chunk: string) => void,
 ): Promise<string> => {
   if (!userMessage.trim()) return "Please provide a query.";
 
   try {
     if (USE_ROUTER) {
-      console.log("[AI] Routing via Edge Function...");
-      // Pass history for multi-turn support
-      return await sendViaRouter(userMessage, history, league);
+      console.log("[AI] Routing via Edge Function (Streaming)...");
+      // Pass history and the onChunk callback for streaming support
+      return await sendViaRouter(userMessage, history, league, onChunk);
     } else {
-      // Client-Side Fallback
+      // Client-Side Fallback (Development/Testing only)
       console.log("[AI] Using Client-Side SDK...");
       // Client-side SDK manages history internally within the ChatSession instance.
       const chat = initializeChat(league);
@@ -730,23 +750,29 @@ export const sendMessageToAI = async (
         ? `[SYSTEM INJECTION - ODDS DATA]:\n${rawScheduleContext}\n\n[USER]: ${userMessage}`
         : userMessage;
 
+      // Note: Client-side SDK also supports streaming (sendMessageStream), but we use the buffered response here for simplicity.
       const result = await chat.sendMessage(contextInjection);
-      return result.response.text();
+      const text = result.response.text();
+      if (onChunk) onChunk(text); // Call callback once for consistency, though it won't stream.
+      return text;
     }
   } catch (error) {
     console.error("[AI] Interaction Failed:", error);
     // Provide user-friendly error messages
+    let errorMessage = "I'm having trouble connecting to the sports data network right now. Please try again.";
+
     if (error instanceof Error) {
       if (error.message.includes("Authentication required")) {
-        return "Session expired. Please log in again to access AI analysis.";
-      }
-      if (error.message.includes("Router HTTP Error")) {
-        return "The AI analysis server encountered an issue. Please try again shortly.";
-      }
-      if (error.message.includes("Client AI configuration missing")) {
-        return "AI features are currently unavailable (Configuration Error).";
+        errorMessage = "Session expired. Please log in again to access AI analysis.";
+      } else if (error.message.includes("Router HTTP Error")) {
+        errorMessage = "The AI analysis server encountered an issue. Please try again shortly.";
+      } else if (error.message.includes("Client AI configuration missing")) {
+        errorMessage = "AI features are currently unavailable (Configuration Error).";
       }
     }
-    return "I'm having trouble connecting to the sports data network right now. Please try again.";
+
+    // Ensure the UI reflects the error if streaming was expected
+    if (onChunk) onChunk(errorMessage);
+    return errorMessage;
   }
 };
