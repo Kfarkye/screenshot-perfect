@@ -170,6 +170,43 @@ const checkCacheAndValidate = async (input: RequestInput) => {
 };
 
 /**
+ * Helper: Retry with exponential backoff for transient errors
+ */
+const retryWithBackoff = async <T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  initialDelay = 1000
+): Promise<T> => {
+  let lastError: Error | unknown;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      
+      // Check if it's a 503 error that we should retry
+      if (error instanceof HttpError && error.details && 
+          typeof error.details === 'object' && 'status' in error.details && 
+          error.details.status === 503) {
+        
+        if (attempt < maxRetries - 1) {
+          const delay = initialDelay * Math.pow(2, attempt);
+          console.log(`[RETRY] Attempt ${attempt + 1}/${maxRetries} failed with 503. Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      
+      // For non-503 errors or final attempt, throw immediately
+      throw error;
+    }
+  }
+  
+  throw lastError;
+};
+
+/**
  * 2. THE GENERATION (Slow Path)
  * Calls the LLM via direct fetch, validates the output structure, and generates embeddings.
  */
@@ -183,33 +220,37 @@ const generateAnalysis = async (input: RequestInput): Promise<{ analysis: LLMOut
     Response MUST be a JSON object: { "pick_side": string, "confidence": number (1-100), "reasoning": string }
   `;
 
-  // 2a. Generate Analysis using Google Gemini API
+  // 2a. Generate Analysis using Google Gemini API with retry logic
   try {
     console.log('[Calling Gemini API]', { model: LLM_MODEL, game_id: input.game_id });
     
-    const chatResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL}:generateContent?key=${env.GOOGLE_API_KEY}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `${systemPrompt}\n\nAnalyze: ${JSON.stringify(game_context)}`
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.3,
-          responseMimeType: "application/json",
-        }
-      }),
-    });
+    const chatResponse = await retryWithBackoff(async () => {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL}:generateContent?key=${env.GOOGLE_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `${systemPrompt}\n\nAnalyze: ${JSON.stringify(game_context)}`
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.3,
+            responseMimeType: "application/json",
+          }
+        }),
+      });
 
-    if (!chatResponse.ok) {
-      const errorText = await chatResponse.text();
-      console.error('[Gemini Chat Error]', chatResponse.status, errorText);
-      throw new HttpError(502, "Upstream analysis service unavailable", { status: chatResponse.status, error: errorText });
-    }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Gemini Chat Error]', response.status, errorText);
+        throw new HttpError(502, "Upstream analysis service unavailable", { status: response.status, error: errorText });
+      }
+      
+      return response;
+    });
 
     const chatData = await chatResponse.json();
     console.log('[Gemini Chat Response]', JSON.stringify(chatData).substring(0, 200));
