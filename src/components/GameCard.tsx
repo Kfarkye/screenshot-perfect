@@ -368,33 +368,24 @@ export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, is
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Function invocation error:', error);
+        throw error;
+      }
 
-      console.log('AI Router response:', data);
+      console.log('AI Router full response:', data);
       
-      // Handle streaming response or direct response
+      // The response is already processed by Supabase client
       let responseText = '';
+      
       if (typeof data === 'string') {
-        // If response is SSE stream text, extract the content
-        const lines = data.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const jsonData = JSON.parse(line.substring(6));
-              if (jsonData.type === 'content') {
-                responseText += jsonData.content;
-              }
-            } catch (e) {
-              // Ignore parse errors for non-JSON lines
-            }
-          }
-        }
-      } else if (data?.response) {
-        responseText = data.response;
-      } else if (data?.content) {
-        responseText = data.content;
+        responseText = data;
+      } else if (data && typeof data === 'object') {
+        // Check various possible response formats
+        responseText = data.response || data.content || data.text || JSON.stringify(data);
       } else {
-        responseText = 'Sorry, I encountered an error processing the response.';
+        console.warn('Unexpected response format:', typeof data, data);
+        responseText = 'Sorry, I received an unexpected response format.';
       }
 
       const assistantMsg: ChatMessage = {
