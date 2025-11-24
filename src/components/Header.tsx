@@ -195,4 +195,96 @@ export const Header = React.memo(
       >
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           {/* Brand + League Switcher */}
+          <div className="flex items-center gap-4 sm:gap-6">
+            <a
+              href="/"
+              className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:rounded-md px-1 -mx-1"
+            >
+              <div className="flex flex-col justify-center">
+                <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground leading-none">
+                  Sharp<span className="text-accent">Edge</span>
+                </h1>
+                <p className="hidden sm:block text-[11px] text-muted-foreground tracking-[0.16em] uppercase mt-1">
+                  Price-first betting workspace
+                </p>
+              </div>
+            </a>
 
+            {/* League Toggle Pill */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] text-muted-foreground tracking-[0.16em] uppercase hidden md:inline">
+                Leagues
+              </span>
+              <div className="relative inline-flex bg-muted/80 border border-border rounded-full p-1 shadow-sm">
+                <button
+                  onClick={() => onLeagueChange("NHL")}
+                  className={cn(
+                    "px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs font-bold rounded-full transition-colors duration-200 relative z-10 tracking-[0.14em] uppercase",
+                    activeLeague === "NHL" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  NHL
+                </button>
+                <button
+                  onClick={() => onLeagueChange("NFL")}
+                  className={cn(
+                    "px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs font-bold rounded-full transition-colors duration-200 relative z-10 tracking-[0.14em] uppercase",
+                    activeLeague === "NFL" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  NFL
+                </button>
+                <button
+                  onClick={() => onLeagueChange("NBA")}
+                  className={cn(
+                    "px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs font-bold rounded-full transition-colors duration-200 relative z-10 tracking-[0.14em] uppercase",
+                    activeLeague === "NBA" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  NBA
+                </button>
+                {/* Sliding Indicator */}
+                <div
+                  className={cn(
+                    "absolute top-1 bottom-1 w-[calc(33.333%-2.67px)] bg-background shadow-md rounded-full border border-border transition-transform duration-300 ease-cubic-bezier z-0",
+                    sliderPositionClass,
+                  )}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Right side controls */}
+          <nav className="flex items-center gap-3 sm:gap-5">
+            <StatusIndicator status={marketStatus} isOnline={isOnline} />
+
+            {onSignOut && (
+              <>
+                <div className="w-px h-6 bg-border hidden sm:block" aria-hidden="true" />
+                <button
+                  onClick={onSignOut}
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-muted/80"
+                >
+                  Sign Out
+                </button>
+              </>
+            )}
+
+            <div className="w-px h-6 bg-border hidden sm:block" aria-hidden="true" />
+            <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} />
+          </nav>
+        </div>
+
+        <style>{`
+          .ease-cubic-bezier { transition-timing-function: cubic-bezier(0.645, 0.045, 0.355, 1); }
+          @keyframes ping-slow { 75%, 100% { transform: scale(2.5); opacity: 0; } }
+          .animate-ping-slow { animation: ping-slow 3s cubic-bezier(0, 0, 0.2, 1) infinite; }
+          @media (prefers-reduced-motion: reduce) {
+            .motion-safe\\:animate-ping-slow { animation: none !important; }
+          }
+        `}</style>
+      </header>
+    );
+  },
+);
+Header.displayName = "Header";
