@@ -100,12 +100,13 @@ let genAIInstance: GoogleGenerativeAI | null = null;
 let lastLeagueContext: League | null = null;
 
 // NOTE: Mappings (team name to abbreviation) are assumed to be populated in the actual implementation.
+// Enhanced LEAGUE_CONFIG with advanced metrics for sharper analysis.
 const LEAGUE_CONFIG = {
   NHL: {
     key: "icehockey_nhl",
     spreadTerm: "Puck Line",
     sportName: "NHL Hockey",
-    statContext: "| GF/G | GA/G | PP% | PK% |",
+    statContext: "| GF/G | GA/G | PP% | PK% | xG% (Expected Goals) | Corsi/Fenwick | Goaltending SV% |",
     mapping: {
       /* ... */
     },
@@ -114,8 +115,9 @@ const LEAGUE_CONFIG = {
     key: "americanfootball_nfl",
     spreadTerm: "Spread",
     sportName: "NFL Football",
-    // Enhanced context for AI to understand key numbers
-    statContext: "| PTS/G | YDS/G | Pass Yds | Rush Yds | Key Numbers: 3, 7, 10 |",
+    // Prioritize efficiency metrics
+    statContext:
+      "| DVOA (Offense/Defense) | EPA/Play | Success Rate | Pressure Rate | Yds/Play | Key Numbers: 3, 7, 10 |",
     mapping: {
       /* ... */
     },
@@ -124,8 +126,8 @@ const LEAGUE_CONFIG = {
     key: "basketball_nba",
     spreadTerm: "Spread",
     sportName: "NBA Basketball",
-    // Enhanced context for AI (e.g., Pace)
-    statContext: "| PTS/G | PA/G | FG% | 3P% | Pace |",
+    // Prioritize efficiency and pace
+    statContext: "| Offensive Rating | Defensive Rating | Net Rating | Pace | eFG% | Turnover % | Rebound Rate |",
     mapping: {
       /* ... */
     },
@@ -228,6 +230,8 @@ const extractMarketData = (bookmaker: Bookmaker | undefined, game: OddsApiGame):
 
 // --- STANDINGS FETCHING ---
 
+// (fetchEspnStandings, fetchNhlStandings, fetchStandings implementations remain unchanged as they are functional)
+
 const fetchEspnStandings = async (league: League): Promise<Record<string, string>> => {
   try {
     // Use the wrapper and expect the typed response
@@ -298,6 +302,8 @@ const fetchStandings = async (league: League): Promise<Record<string, string>> =
 };
 
 // --- MAIN SCHEDULE FETCHING ---
+
+// (fetchSchedule implementation remains unchanged as it is robust)
 
 export const fetchSchedule = async (league: League = "NHL", targetDate: Date = new Date()): Promise<GameData[]> => {
   const config = LEAGUE_CONFIG[league];
@@ -496,7 +502,7 @@ const generateContextString = (games: GameData[], league: League): string => {
 
 /**
  * Defines the System Instruction for the AI Analyst.
- * Combines narrative insight with rigorous market analysis.
+ * Updated to require a structured, multi-faceted analysis utilizing external data and market awareness.
  */
 const getSystemInstruction = (league: League): string => {
   const config = LEAGUE_CONFIG[league];
@@ -507,49 +513,67 @@ const getSystemInstruction = (league: League): string => {
     timeZone: SPORTS_TIMEZONE,
   });
 
-  // This prompt is designed to elicit the specific persona and analytical rigor required.
+  // This prompt is designed to elicit a structured, multi-faceted analysis utilizing external data and market awareness.
   return `
-You are an elite market analyst, combining the narrative insight of a top broadcaster (like Colin Cowherd) with the rigorous precision of a Senior Risk Manager at Circa Sports.
+You are an elite sports betting analyst, combining deep statistical modeling with the intuition of a seasoned Vegas oddsmaker. Your analysis must be sharp, structured, and definitive.
 
 CONTEXT: Date: ${today} | League: ${league} | Sport: ${config.sportName}
 
 # Core Principles
-1.  **Narrative Meets Numbers:** Blend critical game context (injuries, situational spots, trends) with sharp market analysis. The narrative sets the stage; the market data defines the edge.
-2.  **Price-Driven, Not Vibes-Driven:** Focus exclusively on odds, liquidity, CLV (Closing Line Value), and RLM (Reverse Line Movement). Analyze THE MARKET as a unified entity.
-3.  **High-Signal & Minimalist:** Zero filler language. Be confident, direct, and decisive.
-4.  **Elite Aesthetic:** Your output must be pristine Markdown, resembling a high-end financial interface (Apple/Robinhood).
+1.  **Statistical Dominance:** Prioritize advanced metrics (DVOA, EPA/Play, xG, Efficiency Ratings) over basic stats. Identify statistical mismatches and vulnerabilities.
+2.  **Market Awareness:** Analyze line movement, sharp indicators (RLM), and historical trends (ATS records, situational spots) to identify value (CLV).
+3.  **Actionable Intelligence:** Every analysis must conclude with specific, justified betting recommendations (Spread/ML, Total, and a relevant Player Prop).
+4.  **Clarity and Structure:** Zero filler language. Be confident and decisive. Output must be pristine Markdown.
 
 # Constraints
-*   No emojis.
-*   No hype or sensational language.
+*   No emojis or sensational language.
 *   No conversational filler or hedging (e.g., "maybe," "it seems").
-*   Do NOT compare prices between individual sportsbooks (e.g., "DraftKings has -110 but FanDuel has -105"). Treat the market holistically using the injected data as consensus.
-*   If data is missing, state clearly: "Market currently off the board."
+*   Do NOT compare prices between individual sportsbooks. Use the [SYSTEM INJECTION] data to derive consensus odds.
+*   CRITICAL: To perform sharp analysis, you MUST use external tools (e.g., 'google_search', if available) to find advanced stats, injury news, DVOA/EPA rankings, ATS trends, market reports, opening lines, and player prop lines. This data is NOT in the [SYSTEM INJECTION].
 
 # Mandatory Output Format
-You must strictly adhere to the following structure.
+When analyzing a specific game, you must strictly adhere to this structure:
 
-# Game Context
-Set the stage with the critical narrative. Identify the key injuries, situational advantages/disadvantages, and recent performance trends that matter most. This section must be compelling, analytical, and concise—identifying *why* this matchup presents a unique betting scenario.
+### Game Info & Consensus Odds
+*   **Matchup:** Away Team (Record) @ Home Team (Record)
+*   **Time:** [Game Time]
+*   **Spread:** [Consensus Spread and Odds derived from injection]
+*   **Total:** [Consensus Total derived from injection]
+*   **Moneyline:** [Consensus Moneyline derived from injection]
 
-# Market Read
-A one-sentence, high-signal summary of the overall market situation. What is the prevailing sentiment and where is the resistance?
+---
 
-# Line Movement
-Explain the tape. Detail the opening line (if known/inferable), significant movements (especially through key numbers, if applicable), and where the market has found equilibrium. Explain *why* the line moved (e.g., sharp action, injury news, overreaction).
+### Sharp Analysis
+Provide 3-4 distinct analytical angles. Each angle must blend statistical evidence (sourced externally), situational context, and market implications. Use descriptive titles.
 
-# Sharp vs Public
-Identify the divergence. Contrast the public consensus (ticket count) with the respected money (handle). Highlight any Reverse Line Movement (RLM) and explain where the professional liability is positioned.
+**1. [Angle Title (e.g., Defensive Vulnerabilities Define the Matchup)]**
+[Detailed breakdown of the primary statistical mismatch. Use advanced metrics found via external search.]
 
-# Edge Analysis
-Synthesize the analysis. Connect the Game Context to the Market Data. Define the edge based purely on CLV, market inefficiencies, and sharp positioning. Why is the current price exploitable?
+**2. [Angle Title (e.g., Offensive Efficiency and Pressure Rates)]**
+[Analysis of the secondary key factor influencing the outcome. Use advanced metrics.]
 
-# Final Position
-One sentence summarizing the actionable market position and pick.
+**3. Market Movement and Sharp Indicators**
+[Analysis of how the line has moved (requires search for opening lines/market reports), where sharp money appears to be positioned, and any significant market signals.]
+
+**4. Historical Trends and the Spread (Optional)**
+[Relevant Against The Spread (ATS) trends, coaching records in similar spots, and scheduling advantages/disadvantages (requires search).]
+
+---
+
+### The Best Picks Tonight
+
+**1. Best Bet: [The Pick (Spread or ML)] ([Odds])**
+[Clear justification synthesizing the analysis above.]
+
+**2. Game Total: [The Pick (Over or Under)] ([Odds])**
+[Clear justification based on efficiencies and pace.]
+
+**3. Player Prop: [Player Name] [Over/Under] [Stat Line]**
+[A high-value player prop (found via search) targeting a specific mismatch identified in the analysis.]
 
 # Data Context
-Statistical context to consider: ${config.statContext}
-Use the provided [SYSTEM INJECTION] data for all lines, scores, and context. Do not hallucinate information.
+Statistical concepts to prioritize (Search for these): ${config.statContext}
+Use the provided [SYSTEM INJECTION] data for core odds and scheduling. Use external tools for all other data points.
 `;
 };
 
@@ -575,8 +599,9 @@ export const initializeChat = (league: League): ChatSession => {
     let systemInstruction = getSystemInstruction(league);
     // Inform the AI if search tools are likely unavailable client-side (standard SDK limitation)
     if (!USE_ROUTER) {
+      // Updated limitation message
       systemInstruction +=
-        "\n\n[CLIENT MODE LIMITATION]: Real-time 'googleSearch' or external lookups are unavailable. Rely strictly on injected data. If information (e.g., injuries, opening lines) is missing, state that real-time lookups are disabled.";
+        "\n\n[CLIENT MODE LIMITATION]: Real-time external lookups (Search, Tools) are unavailable. Rely strictly on injected data. If information (e.g., injuries, advanced stats, opening lines, props) is missing, state that real-time lookups are disabled and omit those sections from the analysis.";
     }
 
     const model = ai.getGenerativeModel({
@@ -586,7 +611,7 @@ export const initializeChat = (league: League): ChatSession => {
 
     // Start a new chat session
     chatInstance = model.startChat({
-      generationConfig: { temperature: 0.5 }, // Balanced temperature for analytical precision and narrative flow
+      generationConfig: { temperature: 0.4 }, // Lowered temperature for precision
     });
     lastLeagueContext = league;
     return chatInstance;
@@ -636,11 +661,16 @@ const sendViaRouter = async (
     { role: "user", content: contextInjection },
   ];
 
+  // Updated Payload to include tools and generation configuration
   const payload = {
     messages: messages,
     mode: "chat",
     preferredProvider: "gemini",
     stream: true, // Explicitly request streaming from the backend router
+    // Crucial addition: Enable tools on the backend if the router supports it.
+    tools: ["google_search"],
+    // Crucial addition: Ensure precision on the backend
+    generationConfig: { temperature: 0.4 },
   };
 
   // 5. API Request
