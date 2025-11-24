@@ -139,13 +139,61 @@ All colors MUST be HSL.
     @apply text-foreground;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    hyphens: auto;
   }
   
   .formatted-content p {
-    @apply mb-4;
+    margin: 1rem 0;
+    line-height: 1.9;
   }
   
   .formatted-content p:last-child {
     @apply mb-0;
+  }
+  
+  .formatted-content ul,
+  .formatted-content ol {
+    margin: 1.25rem 0;
+  }
+  
+  .formatted-content h1,
+  .formatted-content h2,
+  .formatted-content h3,
+  .formatted-content h4,
+  .formatted-content h5,
+  .formatted-content h6 {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+  }
+  
+  .formatted-content h1 {
+    font-size: 1.875rem;
+    margin-top: 2.5rem;
+  }
+  
+  .formatted-content h2 {
+    font-size: 1.5rem;
+    margin-top: 2rem;
+  }
+  
+  .formatted-content h3 {
+    font-size: 1.25rem;
+    margin-top: 1.75rem;
+  }
+  
+  .formatted-content code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  
+  .formatted-content pre {
+    margin: 1.5rem 0;
+  }
+  
+  .formatted-content blockquote {
+    margin: 1.5rem 0;
   }
 }

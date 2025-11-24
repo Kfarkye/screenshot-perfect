@@ -298,33 +298,31 @@ const renderInline = (
   // Dynamic theming based on context
   const getSegmentStyle = (type: ProcessedSegment['type']) => {
     const baseStyles = {
-      text: isError ? 'text-white/95' : isModel ? 'text-foreground' : 'text-foreground',
-      bold: 'font-semibold',
-      italic: 'italic',
+      text: isError ? 'text-white/95' : 'text-gray-900 dark:text-gray-100',
+      bold: 'font-semibold text-gray-900 dark:text-white',
+      italic: 'italic text-gray-700 dark:text-gray-300',
       code: cn(
         'px-2 py-0.5 rounded-md text-[0.9em] font-mono border mx-0.5 align-baseline',
         isError
           ? 'bg-white/20 border-white/30 text-white'
-          : isModel
-          ? 'bg-muted text-foreground border-border'
-          : 'bg-muted text-foreground border-border'
+          : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700'
       ),
       link: cn(
-        'underline decoration-1 underline-offset-4 hover:decoration-2 transition-all',
+        'underline decoration-1 underline-offset-4 hover:decoration-2 transition-all font-medium',
         isError ? 'text-white' : 'text-accent hover:text-accent/80'
       ),
-      record: 'inline-block text-[0.9em] font-medium mx-1',
+      record: 'inline-block text-[0.9em] font-medium mx-1 text-gray-700 dark:text-gray-300',
       metric: cn(
         'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[0.85em] font-medium',
-        'bg-muted border border-border'
+        'bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100'
       ),
       lane: cn(
         'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold tracking-wide uppercase',
         'bg-gradient-to-r',
-        role === 'architect' && 'from-purple-500/20 to-purple-600/20 text-purple-400 border border-purple-500/30',
-        role === 'database' && 'from-blue-500/20 to-blue-600/20 text-blue-400 border border-blue-500/30',
-        role === 'interface' && 'from-green-500/20 to-green-600/20 text-green-400 border border-green-500/30',
-        role === 'test' && 'from-orange-500/20 to-orange-600/20 text-orange-400 border border-orange-500/30'
+        role === 'architect' && 'from-purple-500/20 to-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/30',
+        role === 'database' && 'from-blue-500/20 to-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-500/30',
+        role === 'interface' && 'from-green-500/20 to-green-600/20 text-green-600 dark:text-green-400 border border-green-500/30',
+        role === 'test' && 'from-orange-500/20 to-orange-600/20 text-orange-600 dark:text-orange-400 border border-orange-500/30'
       )
     };
     
@@ -451,37 +449,37 @@ const CodeBlock = React.memo(({ language, code, metadata }: CodeBlockProps) => {
   const showLineNumbers = metadata?.lineNumbers ?? lines.length > 5;
   
   return (
-    <div className="my-4 rounded-xl overflow-hidden border border-gray-800 bg-[#0a0a0a] shadow-2xl">
+    <div className="my-6 rounded-2xl overflow-hidden border border-gray-200/80 dark:border-gray-800 bg-gray-50/50 dark:bg-[#0a0a0a] shadow-2xl backdrop-blur-sm">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-[#141414] border-b border-gray-800">
-        <div className="flex items-center gap-3">
-          <div className="flex gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-500/80" />
-            <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-            <div className="w-3 h-3 rounded-full bg-green-500/80" />
+      <div className="flex items-center justify-between px-5 py-3.5 bg-white/80 dark:bg-[#141414] border-b border-gray-200 dark:border-gray-800 backdrop-blur-sm">
+        <div className="flex items-center gap-4">
+          <div className="flex gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-500/90 shadow-sm" />
+            <div className="w-3 h-3 rounded-full bg-yellow-500/90 shadow-sm" />
+            <div className="w-3 h-3 rounded-full bg-green-500/90 shadow-sm" />
           </div>
-          <div className="flex items-center gap-2">
-            <Terminal size={14} className="text-gray-500" />
-            <span className="text-xs font-mono text-gray-400">{language}</span>
+          <div className="flex items-center gap-2.5">
+            <Terminal size={15} className="text-gray-500 dark:text-gray-400" />
+            <span className="text-xs font-mono text-gray-700 dark:text-gray-300 font-medium">{language}</span>
             {metadata?.filename && (
               <>
-                <ChevronRight size={12} className="text-gray-600" />
-                <span className="text-xs text-gray-400">{metadata.filename}</span>
+                <ChevronRight size={13} className="text-gray-400 dark:text-gray-600" />
+                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{metadata.filename}</span>
               </>
             )}
           </div>
         </div>
         <button
           onClick={handleCopy}
-          className="px-3 py-1 rounded text-xs font-medium transition-all hover:bg-gray-800 text-gray-400 hover:text-gray-200"
+          className="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
         >
           {isCopied ? (
-            <span className="flex items-center gap-1 text-green-400">
+            <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
               <Check size={14} />
               Copied
             </span>
           ) : (
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <Copy size={14} />
               Copy
             </span>
@@ -493,22 +491,22 @@ const CodeBlock = React.memo(({ language, code, metadata }: CodeBlockProps) => {
       <div className="relative">
         <pre
           ref={codeRef}
-          className="p-4 overflow-x-auto font-mono text-sm leading-relaxed"
+          className="p-5 overflow-x-auto font-mono text-[13px] leading-[1.7] bg-white dark:bg-[#0a0a0a]"
           style={{
             scrollbarWidth: 'thin',
-            scrollbarColor: '#333 transparent'
+            scrollbarColor: '#444 transparent'
           }}
         >
-          <code className="text-gray-200">
+          <code className="text-gray-900 dark:text-gray-100">
             {showLineNumbers ? (
               <div className="flex">
-                <div className="select-none pr-4 text-gray-600 text-right">
+                <div className="select-none pr-5 text-gray-400 dark:text-gray-600 text-right min-w-[3em]">
                   {lines.map((_, idx) => (
                     <div
                       key={idx}
                       className={cn(
-                        'leading-relaxed',
-                        metadata?.highlightLines?.includes(idx + 1) && 'text-yellow-400'
+                        'leading-[1.7]',
+                        metadata?.highlightLines?.includes(idx + 1) && 'text-yellow-600 dark:text-yellow-400 font-semibold'
                       )}
                     >
                       {idx + 1}
@@ -520,9 +518,9 @@ const CodeBlock = React.memo(({ language, code, metadata }: CodeBlockProps) => {
                     <div
                       key={idx}
                       className={cn(
-                        'leading-relaxed',
+                        'leading-[1.7]',
                         metadata?.highlightLines?.includes(idx + 1) &&
-                        'bg-yellow-400/10 -mx-4 px-4 border-l-2 border-yellow-400'
+                        'bg-yellow-50 dark:bg-yellow-400/10 -mx-5 px-5 border-l-2 border-yellow-500'
                       )}
                     >
                       {line || ' '}
@@ -746,11 +744,11 @@ const FormattedText = React.memo(({ text, role, isError, isStreaming }: Formatte
                 key={key}
                 className={cn(
                   isOrderedList ? 'list-decimal' : 'list-disc',
-                  'pl-6 space-y-2.5 my-4 text-[15px] leading-[1.7]'
+                  'pl-8 space-y-3 my-5 text-[15px] leading-[1.8] marker:text-gray-400 dark:marker:text-gray-600'
                 )}
               >
                 {items.map((item, i) => (
-                  <li key={i}>
+                  <li key={i} className="pl-2">
                     {renderInline(TextProcessor.process(item), { isModel, isError, role })}
                   </li>
                 ))}
@@ -766,18 +764,18 @@ const FormattedText = React.memo(({ text, role, isError, isStreaming }: Formatte
             const HeadingTag = `h${Math.min(level, 6)}` as keyof JSX.IntrinsicElements;
             
             const sizeClass = {
-              1: 'text-2xl mt-6 mb-3',
-              2: 'text-xl mt-5 mb-3',
-              3: 'text-lg mt-4 mb-2',
-              4: 'text-base mt-3 mb-2',
-              5: 'text-sm mt-3 mb-1',
-              6: 'text-xs mt-2 mb-1'
+              1: 'text-3xl mt-8 mb-4 font-extrabold',
+              2: 'text-2xl mt-7 mb-3.5 font-bold',
+              3: 'text-xl mt-6 mb-3 font-bold',
+              4: 'text-lg mt-5 mb-2.5 font-semibold',
+              5: 'text-base mt-4 mb-2 font-semibold',
+              6: 'text-sm mt-3 mb-1.5 font-semibold'
             }[level] || 'text-base';
             
             return (
               <HeadingTag
                 key={key}
-                className={cn(sizeClass, 'font-bold tracking-tight leading-tight')}
+                className={cn(sizeClass, 'tracking-tight leading-tight text-gray-900 dark:text-white')}
               >
                 {renderInline(TextProcessor.process(content), { isModel, isError, role })}
               </HeadingTag>
@@ -790,7 +788,7 @@ const FormattedText = React.memo(({ text, role, isError, isStreaming }: Formatte
             return (
               <blockquote
                 key={key}
-                className="border-l-4 border-accent pl-4 italic my-3 text-text-secondary"
+                className="border-l-4 border-accent pl-5 py-2 italic my-5 text-gray-600 dark:text-gray-400 bg-gray-50/50 dark:bg-white/5 rounded-r-lg"
               >
                 {renderInline(TextProcessor.process(quote), { isModel, isError, role })}
               </blockquote>
@@ -816,7 +814,7 @@ const FormattedText = React.memo(({ text, role, isError, isStreaming }: Formatte
           
           // Default paragraph
           return (
-            <p key={key} className="text-[15px] my-4 leading-[1.8] whitespace-pre-wrap break-words">
+            <p key={key} className="text-[15px] my-4 leading-[1.9] text-gray-800 dark:text-gray-200">
               {renderInline(TextProcessor.process(trimmed), { isModel, isError, role })}
             </p>
           );
@@ -825,7 +823,7 @@ const FormattedText = React.memo(({ text, role, isError, isStreaming }: Formatte
     });
   }, [text, role, isError, isStreaming]);
   
-  return <div className="formatted-content space-y-2 max-w-none">{content}</div>;
+  return <div className="formatted-content space-y-1 max-w-none antialiased">{content}</div>;
 });
 FormattedText.displayName = 'FormattedText';
 
@@ -892,12 +890,12 @@ const Avatar = React.memo(({ role, status }: AvatarProps) => {
     <div className="relative">
       <div
         className={cn(
-          'w-10 h-10 rounded-xl flex items-center justify-center',
+          'w-11 h-11 rounded-xl flex items-center justify-center',
           'bg-gradient-to-br',
           config.gradient,
           'shadow-lg',
           config.shadow,
-          'border border-white/10',
+          'border border-white/10 dark:border-white/10',
           'transition-all duration-300',
           'hover:scale-105 hover:shadow-xl',
           status === 'processing' && 'animate-pulse'
@@ -906,7 +904,7 @@ const Avatar = React.memo(({ role, status }: AvatarProps) => {
         aria-label={config.label}
       >
         <config.Icon
-          size={20}
+          size={21}
           strokeWidth={2}
           className="text-white"
         />
@@ -1120,20 +1118,20 @@ export const ChatMessage = React.memo(({
         {/* Content Container */}
         <div className="flex flex-col min-w-0 flex-1">
           {/* Main Bubble */}
-          <div className={cn('p-5', bubbleStyle)}>
+          <div className={cn('p-6 shadow-sm', bubbleStyle)}>
             {error && (
-              <div className="mb-3 p-3 bg-black/20 rounded-lg border border-danger/50">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+              <div className="mb-4 p-4 bg-black/20 rounded-xl border border-danger/50 backdrop-blur-sm">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle size={18} className="mt-0.5 flex-shrink-0" />
                   <div>
-                    <div className="font-semibold text-sm">{error.code}</div>
-                    <div className="text-sm opacity-90">{error.message}</div>
+                    <div className="font-semibold text-sm mb-1">{error.code}</div>
+                    <div className="text-sm opacity-90 leading-relaxed">{error.message}</div>
                   </div>
                 </div>
                 {error.recoverable && onRetry && (
                   <button
                     onClick={() => onRetry(id)}
-                    className="mt-2 px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-xs transition-colors"
+                    className="mt-3 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors font-medium"
                   >
                     Retry
                   </button>
