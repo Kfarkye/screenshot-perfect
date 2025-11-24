@@ -14,3 +14,6 @@ verify_jwt = true
 
 [functions.fetch-standings]
 verify_jwt = true
+
+[functions.seed-nfl-schedule]
+verify_jwt = false
