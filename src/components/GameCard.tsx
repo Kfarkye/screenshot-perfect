@@ -313,7 +313,7 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
                   <span className={cn("text-lg font-bold tracking-tight transition-colors duration-300", winner === 'home' ? 'text-muted-foreground opacity-70' : 'text-foreground')}>
                     {awayTeam}
                   </span>
-                  <span className="text-[10px] font-mono text-muted-foreground tracking-wide">{awayRecord}</span>
+                  {awayRecord && <span className="text-xs font-semibold text-muted-foreground tracking-wide">{awayRecord}</span>}
                 </div>
               </div>
               {showScores && (
@@ -330,7 +330,7 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
                   <span className={cn("text-lg font-bold tracking-tight transition-colors duration-300", winner === 'away' ? 'text-muted-foreground opacity-70' : 'text-foreground')}>
                     {homeTeam}
                   </span>
-                  <span className="text-[10px] font-mono text-muted-foreground tracking-wide">{homeRecord}</span>
+                  {homeRecord && <span className="text-xs font-semibold text-muted-foreground tracking-wide">{homeRecord}</span>}
                 </div>
               </div>
               {showScores && (
