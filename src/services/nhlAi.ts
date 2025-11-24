@@ -127,10 +127,16 @@ const fetchEspnStandings = async (league: League): Promise<Record<string, string
     console.log(`[Standings] Raw ${league} data:`, data);
     const standings: Record<string, string> = {};
 
+    // ESPN API can have different structures
     const processEntries = (entries: any[]) => {
+      if (!entries || !Array.isArray(entries)) return;
+      
       entries.forEach((entry: any) => {
-        const abbr = entry.team.abbreviation;
-        const record = entry.stats.find((s: any) => s.name === 'overall')?.displayValue;
+        const abbr = entry.team?.abbreviation;
+        const stats = entry.stats || [];
+        const record = stats.find((s: any) => s.name === 'overall' || s.type === 'total')?.displayValue || 
+                       stats.find((s: any) => s.abbreviation === 'Total')?.displayValue;
+        
         if (abbr && record) {
           standings[abbr] = record;
           console.log(`[Standings] ${abbr}: ${record}`);
@@ -138,11 +144,28 @@ const fetchEspnStandings = async (league: League): Promise<Record<string, string
       });
     };
 
-    data.children?.forEach((conf: any) => {
-      conf.children?.forEach((div: any) => {
-        if (div.standings?.entries) processEntries(div.standings.entries);
+    // Try multiple ESPN API structures
+    if (data.children) {
+      // Structure 1: children -> children -> standings -> entries
+      data.children.forEach((conf: any) => {
+        if (conf.standings?.entries) {
+          processEntries(conf.standings.entries);
+        }
+        if (conf.children) {
+          conf.children.forEach((div: any) => {
+            if (div.standings?.entries) {
+              processEntries(div.standings.entries);
+            }
+          });
+        }
       });
-    });
+    } else if (data.standings?.entries) {
+      // Structure 2: standings -> entries
+      processEntries(data.standings.entries);
+    } else if (Array.isArray(data)) {
+      // Structure 3: direct array
+      processEntries(data);
+    }
     
     console.log(`[Standings] Total teams found: ${Object.keys(standings).length}`, standings);
     return standings;
