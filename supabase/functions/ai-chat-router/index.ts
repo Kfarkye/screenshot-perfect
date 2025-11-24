@@ -1455,6 +1455,8 @@ Deno.serve(async (req: Request) => {
     log("DEBUG", "[REQUEST] Body parsed and user authenticated", {
       ctx,
       rawBodySize: JSON.stringify(rawBody).length,
+      rawBodyKeys: Object.keys(rawBody),
+      rawBodyPreview: JSON.stringify(rawBody).substring(0, 500),
     });
 
     await rateLimiter.checkLimit(user.id);
@@ -1463,7 +1465,12 @@ Deno.serve(async (req: Request) => {
 
     const validationResult = RequestBodySchema.safeParse(rawBody);
     if (!validationResult.success) {
-      log("WARN", "[VALIDATION] Request validation failed", { ctx, errors: validationResult.error.format() });
+      log("WARN", "[VALIDATION] Request validation failed", { 
+        ctx, 
+        errors: validationResult.error.format(),
+        receivedKeys: Object.keys(rawBody),
+        receivedBody: JSON.stringify(rawBody).substring(0, 1000),
+      });
       throw new ValidationError("Invalid request structure", validationResult.error.format());
     }
     const requestData = validationResult.data;

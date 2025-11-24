@@ -654,20 +654,24 @@ const sendViaRouter = async (userMessage: string, history: Message[], league: Le
   // 3. History Formatting (for edge function format: {role, content})
   // The edge function expects messages with role and content (not parts array)
   const formattedHistory = history.map((msg) => ({
-    role: msg.role === "user" ? "user" : ("assistant" as const),
+    role: msg.role === "user" ? "user" : "assistant",
     content: msg.content,
   }));
 
   // 4. Construct Payload - edge function expects {role, content} format
+  const messages = [
+    { role: "system", content: getSystemInstruction(league) },
+    ...formattedHistory,
+    { role: "user", content: contextInjection }
+  ];
+
   const payload = {
-    messages: [
-      { role: "system" as const, content: getSystemInstruction(league) },
-      ...formattedHistory,
-      { role: "user" as const, content: contextInjection }
-    ],
-    mode: "chat" as const,
-    preferredProvider: "gemini" as const,
+    messages: messages,
+    mode: "chat",
+    preferredProvider: "gemini",
   };
+
+  console.log("[AI Router] Sending payload:", JSON.stringify(payload, null, 2));
 
   // 5. API Request
   const response = await fetch(API_BASE_URL, {
