@@ -94,6 +94,10 @@ Deno.serve(async (req) => {
               });
               
               console.log('[Odds API] Successfully enriched with live odds');
+            } else if (response.status === 422) {
+              console.log('[Odds API] Odds not available for this date range (422), returning database games only');
+            } else {
+              console.warn(`[Odds API] Unexpected response ${response.status}, using database only`);
             }
           } catch (err) {
             console.warn('[Odds API] Could not fetch live odds, using database only:', err);
