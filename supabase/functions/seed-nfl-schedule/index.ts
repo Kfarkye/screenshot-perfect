@@ -68,21 +68,28 @@ Deno.serve(async (req) => {
     const currentYear = now.getFullYear();
     const allESPNGames: ESPNGame[] = [];
     
-    // NFL has 18 regular season weeks + playoffs
+    // NFL has 18 regular season weeks (seasontype=2 for regular season)
     for (let week = 1; week <= 18; week++) {
       try {
-        const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${week}&dates=${currentYear}`;
+        // Remove dates parameter - let ESPN return all games for that week
+        const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${week}&limit=100`;
+        console.log(`[Seed NFL] Fetching week ${week}...`);
         const espnResponse = await fetch(espnUrl);
         
         if (espnResponse.ok) {
           const espnData = await espnResponse.json();
           const weekGames: ESPNGame[] = espnData.events || [];
           allESPNGames.push(...weekGames);
-          console.log(`[Seed NFL] Week ${week}: ${weekGames.length} games`);
+          console.log(`[Seed NFL] Week ${week}: Fetched ${weekGames.length} games (Total so far: ${allESPNGames.length})`);
+        } else {
+          console.error(`[Seed NFL] Week ${week} failed: ${espnResponse.status} ${espnResponse.statusText}`);
         }
       } catch (err) {
         console.error(`[Seed NFL] Error fetching week ${week}:`, err);
       }
+      
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     console.log(`[Seed NFL] Fetched ${allESPNGames.length} total games from ESPN API`);
