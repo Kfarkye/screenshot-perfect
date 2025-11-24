@@ -843,43 +843,50 @@ const Avatar = React.memo(({ role, status }: AvatarProps) => {
         Icon: User,
         gradient: 'from-accent to-accent-hover',
         shadow: 'shadow-accent/30',
-        label: 'User'
+        label: 'User',
+        emoji: null
       },
       model: {
-        Icon: status === 'processing' ? Cpu : Sparkles,
+        Icon: status === 'processing' ? Cpu : null,
         gradient: 'from-purple-500 to-indigo-600',
         shadow: 'shadow-purple-500/30',
-        label: 'AI Model'
+        label: 'AI Model',
+        emoji: '🤖'
       },
       architect: {
         Icon: Brain,
         gradient: 'from-purple-600 to-purple-700',
         shadow: 'shadow-purple-600/30',
-        label: 'Architect Lane'
+        label: 'Architect Lane',
+        emoji: null
       },
       database: {
         Icon: Database,
         gradient: 'from-blue-600 to-blue-700',
         shadow: 'shadow-blue-600/30',
-        label: 'Database Lane'
+        label: 'Database Lane',
+        emoji: null
       },
       interface: {
         Icon: Layers,
         gradient: 'from-green-600 to-green-700',
         shadow: 'shadow-green-600/30',
-        label: 'Interface Lane'
+        label: 'Interface Lane',
+        emoji: null
       },
       test: {
         Icon: TestTube,
         gradient: 'from-orange-600 to-orange-700',
         shadow: 'shadow-orange-600/30',
-        label: 'Test Lane'
+        label: 'Test Lane',
+        emoji: null
       },
       system: {
         Icon: AlertTriangle,
         gradient: 'from-danger to-red-700',
         shadow: 'shadow-danger/30',
-        label: 'System'
+        label: 'System',
+        emoji: null
       }
     };
     
@@ -903,11 +910,15 @@ const Avatar = React.memo(({ role, status }: AvatarProps) => {
         role="img"
         aria-label={config.label}
       >
-        <config.Icon
-          size={21}
-          strokeWidth={2}
-          className="text-white"
-        />
+        {config.emoji ? (
+          <span className="text-2xl">{config.emoji}</span>
+        ) : (
+          <config.Icon
+            size={21}
+            strokeWidth={2}
+            className="text-white"
+          />
+        )}
       </div>
       
       {status === 'processing' && (
