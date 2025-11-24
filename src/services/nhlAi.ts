@@ -1,7 +1,6 @@
 import { GoogleGenAI, Chat } from "@google/genai";
 import { Message, GameData, MarketData, League } from '../types';
 
-const ODDS_API_KEY = '0e8fada7d6991609b61646b39e36c699';
 const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 const API_BASE = 'https://api.the-odds-api.com/v4/sports';
 
@@ -187,14 +186,25 @@ export const fetchSchedule = async (league: League = 'NHL', targetDate: Date = n
   const daysFrom = target.getTime() < today.getTime() ? diffDays + 1 : 1;
 
   try {
-    const [scoresResponse, oddsResponse, standingsMap] = await Promise.all([
-      fetch(`${API_BASE}/${config.key}/scores/?daysFrom=${daysFrom}&apiKey=${ODDS_API_KEY}`),
-      fetch(`${API_BASE}/${config.key}/odds/?regions=us&markets=h2h,spreads,totals&oddsFormat=american&apiKey=${ODDS_API_KEY}&bookmakers=draftkings,fanduel,betmgm,williamhill,williamhill_us,caesars`),
+    const { supabase } = await import('@/integrations/supabase/client');
+    
+    const [scoresResult, oddsResult, standingsMap] = await Promise.all([
+      supabase.functions.invoke('fetch-odds', {
+        body: { sport: config.key, regions: 'us', markets: 'h2h', dateFormat: 'iso', daysFrom }
+      }),
+      supabase.functions.invoke('fetch-odds', {
+        body: { 
+          sport: config.key, 
+          regions: 'us', 
+          markets: 'h2h,spreads,totals', 
+          bookmakers: 'draftkings,fanduel,betmgm,williamhill,williamhill_us,caesars'
+        }
+      }),
       fetchStandings(league)
     ]);
 
-    const scoresData = scoresResponse.ok ? await scoresResponse.json() : [];
-    const oddsData = oddsResponse.ok ? await oddsResponse.json() : [];
+    const scoresData = scoresResult.data || [];
+    const oddsData = oddsResult.data || [];
 
     // 3. Merge Data
     const gameMap = new Map<string, any>();
