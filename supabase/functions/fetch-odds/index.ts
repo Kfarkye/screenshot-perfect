@@ -153,28 +153,47 @@ Deno.serve(async (req) => {
       const liveOdds = apiResult.status === 'fulfilled' ? apiResult.value : null;
 
       if (dbGames && dbGames.length > 0) {
-        // Transform DB Games
-        responseData = dbGames.map((g: any) => ({
-          id: g.game_id,
-          sport_key: sport,
-          sport_title: sport === 'americanfootball_nfl' ? 'NFL' : 'NBA',
-          commence_time: g.start_time,
-          home_team: g.home_team,
-          away_team: g.away_team,
-          bookmakers: [],
-          ...(g.game_data || {})
-        }));
-
-        // Enrich with Live Odds (O(1) lookup)
+        console.log(`[DB] Found ${dbGames.length} games in database`);
+        
+        // Build lookup map from Odds API (if available)
+        const oddsMap = new Map();
         if (liveOdds && Array.isArray(liveOdds)) {
-          const oddsMap = new Map(liveOdds.map((g: any) => [g.id, g])); // Ensure external ID matches DB ID
-          responseData.forEach(game => {
-            // Note: This assumes DB 'game_id' matches Odds API 'id'. 
-            // If not, you need a fuzzy matcher here based on team names.
-            const live = oddsMap.get(game.id); 
-            if (live?.bookmakers) game.bookmakers = live.bookmakers;
-          });
+          console.log(`[Odds API] Received ${liveOdds.length} games with live odds`);
+          liveOdds.forEach((g: any) => oddsMap.set(g.id, g));
         }
+
+        // Strategy: Prioritize Odds API data, use DB as fallback
+        responseData = dbGames.map((g: any) => {
+          const liveGame = oddsMap.get(g.game_id);
+          
+          if (liveGame) {
+            // Odds API has this game - use it as primary source
+            console.log(`[Merge] Using Odds API data for game ${g.game_id}`);
+            return {
+              ...liveGame,
+              // Only add DB fields that don't exist in live data
+              espn_id: g.game_data?.espn_id || liveGame.espn_id,
+              odds_id: liveGame.id,
+              has_betting_lines: (liveGame.bookmakers?.length || 0) > 0
+            };
+          } else {
+            // No live odds - use DB data
+            console.log(`[Merge] Using DB data only for game ${g.game_id}`);
+            return {
+              id: g.game_id,
+              sport_key: sport,
+              sport_title: sport === 'americanfootball_nfl' ? 'NFL' : 'NBA',
+              commence_time: g.start_time,
+              home_team: g.home_team,
+              away_team: g.away_team,
+              bookmakers: [],
+              ...(g.game_data || {}),
+              has_betting_lines: false
+            };
+          }
+        });
+        
+        console.log(`[Response] Returning ${responseData.length} games total`);
       } else {
         // Fallback: DB empty/failed, use API result directly
         console.log('[Fallback] Using raw API response');
