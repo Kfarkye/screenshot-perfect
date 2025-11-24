@@ -492,17 +492,17 @@ const App: React.FC = () => {
                     tabIndex={activeTab === tab.id ? 0 : -1}
                     onClick={() => handleTabChange(tab.id)}
                     className={cn(
-                    "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ease-cubic-bezier relative z-10",
+                    "flex-1 flex items-center justify-center gap-2.5 py-3 rounded-lg text-[15px] font-bold transition-all duration-300 ease-cubic-bezier relative z-10",
                     activeTab === tab.id
-                        ? "text-textPrimary"
-                        : "text-textSecondary hover:text-textPrimary focus-visible:text-textPrimary",
+                        ? "text-foreground"
+                        : "text-muted-foreground hover:text-foreground focus-visible:text-foreground",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:z-20"
                     )}
                 >
-                    <tab.icon size={16} strokeWidth={2.5} aria-hidden="true" />
-                    <span>{tab.label}</span>
+                    <tab.icon size={18} strokeWidth={2.5} aria-hidden="true" />
+                    <span className="tracking-wide">{tab.label}</span>
                     {activeTab === tab.id && (
-                        <div className="absolute inset-0 bg-surface shadow-subtle rounded-lg -z-10 motion-safe:animate-scale-in" aria-hidden="true" />
+                        <div className="absolute inset-0 bg-background border border-border/30 shadow-md rounded-lg -z-10 motion-safe:animate-scale-in" aria-hidden="true" />
                     )}
                 </button>
                 ))}
