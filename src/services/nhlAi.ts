@@ -1,5 +1,6 @@
 import { GoogleGenAI, Chat } from "@google/genai";
 import { Message, GameData, MarketData, League } from '../types';
+import { supabase } from '@/integrations/supabase/client';
 
 const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 const API_BASE = 'https://api.the-odds-api.com/v4/sports';
@@ -111,10 +112,14 @@ const extractMarketData = (bookmaker: any, game: any): MarketData => {
 // --- STANDINGS FETCHING ---
 
 // Generic ESPN Parser (Works for NFL and NBA)
-const fetchEspnStandings = async (url: string): Promise<Record<string, string>> => {
+const fetchEspnStandings = async (league: League): Promise<Record<string, string>> => {
   try {
-    const res = await fetch(url);
-    const data = await res.json();
+    const { data, error } = await supabase.functions.invoke('fetch-standings', {
+      body: { league }
+    });
+    
+    if (error) throw error;
+    
     const standings: Record<string, string> = {};
 
     const processEntries = (entries: any[]) => {
@@ -139,14 +144,17 @@ const fetchEspnStandings = async (url: string): Promise<Record<string, string>> 
 
 const fetchStandings = async (league: League): Promise<Record<string, string>> => {
   if (league === 'NFL' || league === 'NBA') {
-    return fetchEspnStandings(LEAGUE_CONFIG[league].standingsUrl);
+    return fetchEspnStandings(league);
   }
 
   try {
     // NHL Specific Logic
-    const res = await fetch(LEAGUE_CONFIG.NHL.standingsUrl);
-    if (!res.ok) return {};
-    const data = await res.json();
+    const { data, error } = await supabase.functions.invoke('fetch-standings', {
+      body: { league: 'NHL' }
+    });
+    
+    if (error) throw error;
+    
     const standings: Record<string, string> = {};
     if (data.standings) {
       data.standings.forEach((team: any) => {
