@@ -1,151 +1,211 @@
-
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { fetchSchedule } from '../services/nhlAi';
-import { GameData, League } from '../types';
-import { GameCard } from './GameCard';
-import { RefreshCw, AlertCircle, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
-
-const cn = (...classes: (string | boolean | undefined | null)[]): string => {
-  return classes.filter(Boolean).join(' ');
-};
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { RefreshCw, AlertCircle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { LeagueNavigator } from './LeagueNavigator';
+import { LeagueSection } from './LeagueSection';
+import { GameRow } from './GameRow';
+import { Skeleton } from './ui/skeleton';
+import type { GameData, League } from '@/types';
+import { ALL_LEAGUES } from '@/lib/leagueConfig';
 
 interface ScheduleViewProps {
   onAnalyze?: (game: GameData) => void;
   league: League;
 }
 
-export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league }) => {
+export function ScheduleView({ league }: ScheduleViewProps) {
   const [games, setGames] = useState<GameData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [selectedBook, setSelectedBook] = useState<string>('draftkings');
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  
-  // Date State
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedBookmaker, setSelectedBookmaker] = useState('fanduel');
+  const [selectedLeagues, setSelectedLeagues] = useState<League[]>([league]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  
-  const refreshIntervalRef = useRef<number | null>(null);
 
-  const loadData = useCallback(async (silent = false) => {
-    if (!silent) setIsLoading(true);
-    setError(false);
+  // Load data for all selected leagues
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
     try {
-      // Pass the selected currentDate to the fetcher
-      const data = await fetchSchedule(league, currentDate);
-      if (data) { 
-        // Fetch pre-generated picks from database
-        const { supabase } = await import('@/integrations/supabase/client');
-        const gameIds = data.map(g => g.id);
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      // Fetch games for all selected leagues
+      const allGames: GameData[] = [];
+      
+      for (const leagueType of selectedLeagues) {
+        let scheduleData: any[] = [];
         
-        const { data: picks, error: picksError } = await supabase
-          .from('analysis_memory')
-          .select('game_id, pick_side, confidence_score, reasoning_text, odds_at_generation, created_at')
-          .in('game_id', gameIds)
-          .eq('market_type', 'moneyline');
-
-        if (picksError) {
-          console.error('[PICKS_FETCH_ERROR]', picksError);
+        if (leagueType === 'NHL') {
+          const response = await fetch(
+            `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=${dateStr.replace(/-/g, '')}`
+          );
+          if (!response.ok) throw new Error(`Failed to fetch ${leagueType} schedule`);
+          const data = await response.json();
+          scheduleData = data.events || [];
+        } else if (leagueType === 'NFL') {
+          const { data, error } = await supabase
+            .from('nfl_games')
+            .select('*')
+            .eq('game_date', dateStr);
+          
+          if (error) throw error;
+          scheduleData = data || [];
+        } else if (leagueType === 'NBA') {
+          const { data, error } = await supabase
+            .from('nba_games')
+            .select('*')
+            .eq('game_date', dateStr);
+          
+          if (error) throw error;
+          scheduleData = data || [];
         }
 
-        // Map picks to games
-        const pickMap = new Map((picks || []).map(p => [p.game_id, {
-          id: p.game_id,
-          pick_side: p.pick_side,
-          confidence_score: p.confidence_score,
-          reasoning_text: p.reasoning_text,
-          odds_at_generation: p.odds_at_generation,
-          created_at: p.created_at,
-          market_type: 'moneyline' as const,
-        }]));
-
-        const gamesWithPicks = data.map(game => ({
-          ...game,
-          pick: pickMap.get(game.id)
-        }));
-        
-        setGames(gamesWithPicks);
-        setLastUpdated(new Date());
+        // Transform to GameData format
+        scheduleData.forEach((event: any) => {
+          let gameData: GameData;
+          
+          if (leagueType === 'NHL') {
+            const competition = event.competitions?.[0];
+            const awayTeam = competition?.competitors?.find((c: any) => c.homeAway === 'away');
+            const homeTeam = competition?.competitors?.find((c: any) => c.homeAway === 'home');
+            
+            gameData = {
+              id: event.id,
+              league: 'NHL',
+              awayTeam: awayTeam?.team?.displayName || 'TBD',
+              homeTeam: homeTeam?.team?.displayName || 'TBD',
+              awayRecord: awayTeam?.records?.[0]?.summary,
+              homeRecord: homeTeam?.records?.[0]?.summary,
+              time: new Date(event.date).toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+              }),
+              timestamp: new Date(event.date).getTime(),
+              status: event.status?.type?.state === 'in' ? 'Live' :
+                      event.status?.type?.state === 'post' ? 'Final' : 'Scheduled',
+              awayScore: awayTeam?.score,
+              homeScore: homeTeam?.score,
+              odds: {},
+            };
+          } else {
+            // NFL/NBA from Supabase
+            gameData = {
+              id: event.game_id,
+              league: leagueType,
+              awayTeam: event.away_team,
+              homeTeam: event.home_team,
+              time: new Date(event.start_time).toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+              }),
+              timestamp: new Date(event.start_time).getTime(),
+              status: event.status === 'scheduled' ? 'Scheduled' :
+                      event.status === 'in_progress' ? 'Live' : 
+                      event.status === 'final' ? 'Final' : 'Scheduled',
+              awayScore: event.away_score?.toString(),
+              homeScore: event.home_score?.toString(),
+              odds: {},
+            };
+          }
+          
+          allGames.push(gameData);
+        });
       }
-    } catch (e) {
-      console.error(e);
-      setError(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [league, currentDate]);
 
-  // Initial load and auto-refresh
+      // Fetch analysis picks for all games
+      const gameIds = allGames.map(g => g.id);
+      if (gameIds.length > 0) {
+        const { data: picks } = await supabase
+          .from('analysis_memory')
+          .select('*')
+          .in('game_id', gameIds);
+
+        if (picks) {
+          allGames.forEach(game => {
+            const pick = picks.find(p => p.game_id === game.id);
+            if (pick) {
+              game.pick = {
+                pick_side: pick.pick_side,
+                confidence_score: pick.confidence_score,
+                reasoning_text: pick.reasoning_text,
+                created_at: pick.created_at,
+                odds_at_generation: pick.odds_at_generation || 0,
+              };
+            }
+          });
+        }
+      }
+
+      // Sort by timestamp
+      allGames.sort((a, b) => a.timestamp - b.timestamp);
+      
+      setGames(allGames);
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error('Error loading games:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load games');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentDate, selectedLeagues]);
+
   useEffect(() => {
     loadData();
-
-    // Auto-refresh every 30s only if looking at Today or Future
-    const today = new Date();
-    const isToday = currentDate.getDate() === today.getDate() && 
-                    currentDate.getMonth() === today.getMonth();
     
-    if (isToday) {
-        refreshIntervalRef.current = window.setInterval(() => {
-            loadData(true); 
-        }, 30000);
-    }
+    // Auto-refresh every 60 seconds if viewing today
+    const isToday = currentDate.toDateString() === new Date().toDateString();
+    if (!isToday) return;
 
-    return () => {
-      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
-    };
+    const interval = setInterval(() => {
+      loadData();
+    }, 60000);
+
+    return () => clearInterval(interval);
   }, [loadData, currentDate]);
 
-  // Handle Date Navigation
-  const changeDate = (days: number) => {
-      const newDate = new Date(currentDate);
-      newDate.setDate(newDate.getDate() + days);
-      setCurrentDate(newDate);
-  };
-  
-  const formatDate = (date: Date) => {
-      const today = new Date();
-      // Check if Today
-      if (date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear()) {
-          return "Today";
+  const handleLeagueToggle = (toggledLeague: League) => {
+    setSelectedLeagues(prev => {
+      if (prev.includes(toggledLeague)) {
+        return prev.filter(l => l !== toggledLeague);
+      } else {
+        return [...prev, toggledLeague];
       }
-      
-      // Check if Tomorrow
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      if (date.getDate() === tomorrow.getDate() && date.getMonth() === tomorrow.getMonth() && date.getFullYear() === tomorrow.getFullYear()) {
-          return "Tomorrow";
-      }
-      
-      // Check if Yesterday
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear()) {
-          return "Yesterday";
-      }
-
-      return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    });
   };
 
-  const books = [
-    { id: 'draftkings', label: 'DK' },
-    { id: 'fanduel', label: 'FD' },
-    { id: 'betmgm', label: 'MGM' },
-    { id: 'williamhill', label: 'CZR' },
-  ];
+  // Group games by league
+  const gamesByLeague = useMemo(() => {
+    const grouped: Record<League, GameData[]> = {
+      NHL: [],
+      NFL: [],
+      NBA: [],
+    };
 
-  if (isLoading && games.length === 0) {
+    games.forEach(game => {
+      grouped[game.league].push(game);
+    });
+
+    return grouped;
+  }, [games]);
+
+  const gamesWithPicks = useMemo(() => {
+    return games.filter(g => g.pick);
+  }, [games]);
+
+  if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-5">
-        <div className="relative">
-          <div className="w-10 h-10 border-3 border-accent/30 border-t-accent rounded-full motion-safe:animate-spin"></div>
-          <div className="absolute inset-0 w-10 h-10 border-3 border-transparent border-t-accent/50 rounded-full motion-safe:animate-ping"></div>
-        </div>
-        <div className="flex flex-col items-center gap-2">
-          <p className="text-xs text-foreground font-bold uppercase tracking-[0.15em] motion-safe:animate-pulse">Syncing {league} Odds</p>
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 bg-accent rounded-full motion-safe:animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-1.5 h-1.5 bg-accent rounded-full motion-safe:animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-1.5 h-1.5 bg-accent rounded-full motion-safe:animate-bounce" style={{ animationDelay: '300ms' }}></div>
-          </div>
+      <div className="space-y-6">
+        <LeagueNavigator 
+          selectedLeagues={selectedLeagues}
+          onLeagueToggle={handleLeagueToggle}
+        />
+        <div className="px-4 space-y-4">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-32 w-full" />
+          ))}
         </div>
       </div>
     );
@@ -153,113 +213,83 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onAnalyze, league })
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center p-8 motion-safe:animate-slide-up">
-        <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center mb-5 border border-destructive/20 shadow-lg backdrop-blur-sm">
-          <AlertCircle className="w-7 h-7 text-destructive" strokeWidth={2.5} />
+      <div className="space-y-6">
+        <LeagueNavigator 
+          selectedLeagues={selectedLeagues}
+          onLeagueToggle={handleLeagueToggle}
+        />
+        <div className="flex flex-col items-center justify-center py-12 px-4">
+          <AlertCircle className="w-12 h-12 text-destructive mb-4" />
+          <p className="text-content-secondary text-center mb-4">{error}</p>
+          <button
+            onClick={loadData}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Try Again
+          </button>
         </div>
-        <h3 className="text-xl font-bold text-foreground mb-2.5 tracking-tight">Market Unavailable</h3>
-        <p className="text-sm text-muted-foreground mb-7 max-w-xs mx-auto leading-relaxed">
-          Could not retrieve the slate for this date. The market might be closed.
-        </p>
-        <button
-          onClick={() => loadData(false)}
-          className="glass-button px-7 py-3 rounded-xl text-sm font-bold text-foreground flex items-center gap-2.5 shadow-md hover:shadow-xl motion-safe:hover:scale-105 active:scale-100 transition-all duration-300"
-          style={{ willChange: 'transform' }}
-        >
-          <RefreshCw size={15} strokeWidth={2.5} />
-          <span>Retry Sync</span>
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="px-4 md:px-6 py-3 pb-20 animate-slide-up">
-      {/* Date Navigation & Controls Header */}
-      <div className="flex flex-col gap-5 mb-6">
+    <div className="min-h-screen bg-background pb-20">
+      <LeagueNavigator 
+        selectedLeagues={selectedLeagues}
+        onLeagueToggle={handleLeagueToggle}
+      />
 
-          {/* Top Row: League/Status & Last Update */}
-          <div className="flex items-center justify-between px-1">
-             <div className="flex items-center gap-3.5">
-                <span className="flex h-2.5 w-2.5 relative">
-                  <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-success shadow-glow-accent-sm"></span>
-                </span>
-                 <div className="flex flex-col">
-                   <h2 className="text-xs font-extrabold text-muted-foreground tracking-[0.12em] uppercase">{league} Board</h2>
-                   <span className="text-[9px] text-muted-foreground/70 font-mono hidden md:block mt-0.5">
-                     Updated: {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                   </span>
-                 </div>
-            </div>
+      {/* MY PICKS Section */}
+      {gamesWithPicks.length > 0 && (
+        <section className="mb-6 mt-6">
+          <div className="px-4 py-3 bg-primary/10 border-l-4 border-primary">
+            <h2 className="text-sm font-bold text-primary uppercase tracking-wide">
+              MY PICKS · {gamesWithPicks.length} {gamesWithPicks.length === 1 ? 'game' : 'games'}
+            </h2>
+          </div>
+          <div className="divide-y divide-border">
+            {gamesWithPicks.map((game) => (
+              <GameRow
+                key={game.id}
+                game={game}
+                bookmaker={selectedBookmaker}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
-            {/* Premium Date Navigator */}
-            <div className="flex items-center bg-muted/80 border border-border/50 rounded-full p-1 shadow-sm backdrop-blur-sm">
-                <button
-                    onClick={() => changeDate(-1)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-card text-muted-foreground hover:text-foreground transition-all duration-300 motion-safe:hover:scale-110 active:scale-95"
-                    aria-label="Previous Day"
-                    style={{ willChange: 'transform' }}
-                >
-                    <ChevronLeft size={16} strokeWidth={2.5} />
-                </button>
-                <div className="px-5 min-w-[110px] text-center">
-                    <span className="text-xs font-bold text-foreground uppercase tracking-wide">
-                        {formatDate(currentDate)}
-                    </span>
-                </div>
-                <button
-                    onClick={() => changeDate(1)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-card text-muted-foreground hover:text-foreground transition-all duration-300 motion-safe:hover:scale-110 active:scale-95"
-                    aria-label="Next Day"
-                    style={{ willChange: 'transform' }}
-                >
-                    <ChevronRight size={16} strokeWidth={2.5} />
-                </button>
-            </div>
-          </div>
-          
-          {/* Premium Bookmaker Selector */}
-          <div className="flex justify-end px-1">
-            <div className="flex bg-muted/80 border border-border/50 rounded-xl p-1 shadow-sm backdrop-blur-sm gap-1">
-              {books.map((book) => (
-                 <button
-                   key={book.id}
-                   onClick={() => setSelectedBook(book.id)}
-                   className={cn(
-                     "px-3 md:px-4 py-1.5 text-[10px] font-extrabold rounded-lg transition-all duration-500 uppercase tracking-wide",
-                     selectedBook === book.id
-                       ? 'bg-card shadow-md text-accent border border-accent/20 motion-safe:scale-105'
-                       : 'text-muted-foreground hover:text-foreground hover:bg-card/50 motion-safe:hover:scale-105 active:scale-95'
-                   )}
-                   style={{ willChange: 'transform' }}
-                 >
-                   {book.label}
-                 </button>
-              ))}
-            </div>
-          </div>
-      </div>
-      
+      {/* League Sections */}
       <div className="space-y-0">
-        {games.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 opacity-50">
-             <Calendar className="w-8 h-8 mb-3 text-muted-foreground" />
-             <p className="text-sm font-medium">No {league} games scheduled for {formatDate(currentDate)}.</p>
-          </div>
-        ) : (
-          games.map((game, idx) => (
-            <GameCard key={game.id || idx} game={game} selectedBook={selectedBook} onAnalyze={onAnalyze} />
-          ))
-        )}
+        {ALL_LEAGUES.map(leagueType => (
+          selectedLeagues.includes(leagueType) && (
+            <LeagueSection
+              key={leagueType}
+              league={leagueType}
+              games={gamesByLeague[leagueType]}
+              bookmaker={selectedBookmaker}
+            />
+          )
+        ))}
       </div>
-      
-      <div className="flex flex-col items-center mt-12 gap-2 opacity-50 hover:opacity-100 transition-opacity">
-        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-           SharpEdge Analytics Engine
-        </span>
-        <div className="h-px w-12 bg-border/20"></div>
-      </div>
+
+      {/* Empty State */}
+      {games.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+          <p className="text-content-secondary mb-2">No games scheduled</p>
+          <p className="text-content-tertiary text-sm">
+            Try selecting different leagues or check back later
+          </p>
+        </div>
+      )}
+
+      {/* Last Updated */}
+      {lastUpdated && (
+        <div className="text-center py-4 text-xs text-content-tertiary">
+          Last updated: {lastUpdated.toLocaleTimeString()}
+        </div>
+      )}
     </div>
   );
-};
+}
