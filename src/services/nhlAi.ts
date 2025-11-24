@@ -1,4 +1,4 @@
-// Updated imports for the standard Google Generative AI SDK
+// Imports for Google Generative AI SDK (only used when USE_ROUTER is false)
 import { GoogleGenerativeAI, ChatSession, Content } from "@google/generative-ai";
 import { Message, GameData, MarketData, League } from "../types";
 import { supabase } from "@/integrations/supabase/client";
@@ -354,7 +354,7 @@ export const fetchSchedule = async (league: League = "NHL", targetDate: Date = n
 
     (scoresData || []).forEach((scoreGame) => {
       const existingGame = gameMap.get(scoreGame.id);
-      let status = "Scheduled";
+      let status: "Scheduled" | "Live" | "Final" | "Postponed" | "Canceled" = "Scheduled";
 
       if (scoreGame.completed) status = "Final";
       else if (scoreGame.scores && scoreGame.scores.length > 0) status = "Live";
@@ -424,7 +424,7 @@ export const fetchSchedule = async (league: League = "NHL", targetDate: Date = n
             timeZoneName: "short",
           }),
           timestamp: new Date(game.commence_time).getTime(),
-          status: game.status,
+          status: game.status as "Canceled" | "Final" | "Live" | "Postponed" | "Scheduled",
           awayScore,
           homeScore,
           odds: {
@@ -609,8 +609,8 @@ const sendViaRouter = async (userMessage: string, history: Message[], league: Le
   // 3. History Formatting (for multi-turn context)
   // Format history into the structure expected by Gemini API (user/model roles, parts array)
   const formattedHistory: Content[] = history.map((msg) => ({
-    role: msg.sender === "user" ? "user" : "model",
-    parts: [{ text: msg.text }],
+    role: msg.role === "user" ? "user" : "model",
+    parts: [{ text: msg.content }],
   }));
 
   // 4. Construct Payload

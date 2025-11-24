@@ -400,7 +400,7 @@ const App: React.FC = () => {
       await fetchSchedule(activeLeague, new Date());
       
       // Get AI response (now with real data in context)
-      const responseText = await sendMessageToAI(trimmedContent, activeLeague);
+      const responseText = await sendMessageToAI(trimmedContent, messages, activeLeague);
       
       if (activeRequestRef.current !== requestId) return;
 
