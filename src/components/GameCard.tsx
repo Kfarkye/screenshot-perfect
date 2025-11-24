@@ -1,10 +1,28 @@
-import React, { useState, useMemo, useCallback } from "react";
-import type { GameData, MarketData } from "../types";
-import { Clock, TrendingUp, Activity, Lock, ArrowUp, ArrowDown, AlertTriangle, Sparkles } from "lucide-react";
-import { PickDisplay } from "./PickDisplay";
-import { PickDetailModal } from "./PickDetailModal";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import type { GameData, MarketData, PickData } from "../types";
+import {
+  Clock,
+  TrendingUp,
+  Activity,
+  Lock,
+  ArrowUp,
+  ArrowDown,
+  AlertTriangle,
+  MessageSquare,
+  Send,
+  X,
+  ChevronRight,
+} from "lucide-react";
+// PickDisplay and PickDetailModal are defined later in the file for cohesive updates
+// import { PickDisplay } from "./PickDisplay";
+// import { PickDetailModal } from "./PickDetailModal";
 import { generatePick } from "../services/pickGenerator";
 import { useToast } from "../hooks/use-toast";
+// Assuming these UI components are available in the project based on the original code context
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Button } from "./ui/button";
+import { Textarea } from "./ui/textarea";
+import { ScrollArea } from "./ui/scroll-area";
 
 // Observability (Logic unchanged)
 const observability = {
@@ -50,7 +68,7 @@ const parseLine = (plString: string | undefined): { line: string; juice: string 
 };
 
 // ============================================================================
-// TEAM LOGO COMPONENT - ESSENCE v3.0 Refinement
+// TEAM LOGO COMPONENT
 // ============================================================================
 
 interface TeamLogoProps {
@@ -118,7 +136,7 @@ const TeamLogo = React.memo(({ teamAbbr, teamName, league }: TeamLogoProps) => {
 TeamLogo.displayName = "TeamLogo";
 
 // ============================================================================
-// ODDS CELL COMPONENT - ESSENCE v3.0 Interaction & Materiality
+// ODDS CELL COMPONENT
 // ============================================================================
 
 interface OddsCellProps {
@@ -226,7 +244,7 @@ const OddsCell = React.memo(
 OddsCell.displayName = "OddsCell";
 
 // ============================================================================
-// STATUS BADGE COMPONENT - ESSENCE v3.0 Semantic Precision
+// STATUS BADGE COMPONENT
 // ============================================================================
 
 interface StatusBadgeProps {
@@ -280,7 +298,344 @@ const StatusBadge = React.memo(({ status, time }: StatusBadgeProps) => {
 StatusBadge.displayName = "StatusBadge";
 
 // ============================================================================
-// GAME CARD COMPONENT - ESSENCE v3.0 Orchestration
+// PICK DETAIL MODAL COMPONENT - ESSENCE v3.1 Premium Redesign
+// ============================================================================
+
+interface PickDetailModalProps {
+  pick: PickData;
+  game: GameData;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+// Helper Calculations (Logic unchanged)
+const calculateEV = (confidence: number, odds: number): number => {
+  const probability = confidence / 100;
+  // Calculation logic remains the same, ensuring accuracy
+  return (probability * (odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1) - 1) * 100;
+};
+
+const calculateFairLine = (confidence: number): number => {
+  const probability = confidence / 100;
+  if (probability > 0.5) {
+    return -Math.round((probability / (1 - probability)) * 100);
+  } else {
+    return Math.round(((1 - probability) / probability) * 100);
+  }
+};
+
+export const PickDetailModal: React.FC<PickDetailModalProps> = ({ pick, game, isOpen, onClose }) => {
+  const [showAIChat, setShowAIChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [isAILoading, setIsAILoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Use ESSENCE semantic colors
+  const isHigh = pick.confidence_score >= 70;
+  const isMedium = pick.confidence_score >= 50 && pick.confidence_score < 70;
+
+  const ev = calculateEV(pick.confidence_score, pick.odds_at_generation);
+  const fairLine = calculateFairLine(pick.confidence_score);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isAILoading) return;
+
+    const userMsg: ChatMessage = { role: "user", content: inputMessage };
+    setChatMessages((prev) => [...prev, userMsg]);
+    setInputMessage("");
+    setIsAILoading(true);
+
+    // AI interaction logic (remains unchanged as it's functional)
+    try {
+      // Call AI with game context
+      // Note: Ensure dynamic import works in your environment or use top-level imports.
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("ai-chat-router", {
+        body: {
+          userMessage: inputMessage,
+          gameContext: {
+            awayTeam: game.awayTeam,
+            homeTeam: game.homeTeam,
+            league: game.league,
+            pick: pick.pick_side,
+            confidence: pick.confidence_score,
+            reasoning: pick.reasoning_text,
+            odds: pick.odds_at_generation,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      const assistantMsg: ChatMessage = {
+        role: "assistant",
+        content: data.response || "Sorry, I encountered an error.",
+      };
+      setChatMessages((prev) => [...prev, assistantMsg]);
+    } catch (error) {
+      console.error("AI chat error:", error);
+      observability.logError(error, "PickDetailModal.handleSendMessage");
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Sorry, I encountered an error processing your request.",
+        },
+      ]);
+    } finally {
+      setIsAILoading(false);
+    }
+  };
+
+  return (
+    // ESSENCE v3.1: Premium Glass Materiality (backdrop-blur-2xl, shadow-2xl)
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-5xl max-h-[90vh] bg-glass-surface backdrop-blur-2xl backdrop-saturate-default border border-glass-border shadow-2xl p-0 overflow-hidden rounded-2xl">
+        <div className="flex flex-col h-full max-h-[85vh]">
+          {/* Header - Increased padding (px-8, pt-8) for a spacious, premium feel */}
+          <DialogHeader className="px-8 pt-8 pb-5 border-b border-glass-border">
+            <DialogTitle className="text-title-2 font-bold tracking-tight text-content-primary flex items-center justify-between">
+              <div>
+                {/* Typography: title-2 (24px) */}
+                <div className="text-title-2">
+                  {game.awayTeam} @ {game.homeTeam}
+                </div>
+                <div className="text-body-sm font-medium text-content-secondary mt-1">
+                  {game.league} • {game.time} ET
+                </div>
+              </div>
+
+              {/* AI Chat Toggle Button - ESSENCE Glass/Accent Toggle for premium interaction */}
+              <Button
+                variant="ghost" // Using ghost as base, customizing appearance
+                onClick={() => setShowAIChat(!showAIChat)}
+                className={cn(
+                  "gap-2.5 text-body-sm font-bold px-5 py-2.5 rounded-xl transition-all duration-150 ease-standard",
+                  // Standard state (Subtle Glass)
+                  !showAIChat &&
+                    "bg-glass-surface/50 border border-glass-border text-content-primary hover:bg-glass-surface hover:border-content-tertiary/50 shadow-sm",
+                  // Active state (Solid Accent)
+                  showAIChat &&
+                    "bg-accent text-content-inverse hover:bg-accent-hover shadow-md border border-transparent",
+                )}
+              >
+                {/* Using X when active for clear state indication */}
+                {showAIChat ? <X size={16} strokeWidth={2.5} /> : <MessageSquare size={16} strokeWidth={2.5} />}
+                {showAIChat ? "Close Chat" : "AI Insights"}
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-hidden flex">
+            {/* Main Content - Increased padding (p-8) */}
+            <ScrollArea
+              className={cn("flex-1 p-8 transition-all duration-300 ease-standard", showAIChat ? "lg:w-2/3" : "w-full")}
+            >
+              {/* Pick Summary - Premium Redesign (Subtle background separation) */}
+              <div className="p-6 mb-8 bg-surface-secondary/20 rounded-xl border border-glass-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    {/* Typography: Refined labels */}
+                    <div className="text-caption-1 text-content-secondary mb-2 uppercase tracking-widest font-semibold">
+                      System Recommendation
+                    </div>
+                    {/* Typography: Large Title (36px) for the pick */}
+                    <div className="text-large-title font-extrabold tracking-tight text-content-primary mb-1">
+                      {pick.pick_side}
+                    </div>
+                    {/* Typography: Title 3 (20px) Mono for odds */}
+                    <div className="text-title-3 text-content-tertiary font-mono font-semibold">
+                      {pick.odds_at_generation > 0 ? "+" : ""}
+                      {pick.odds_at_generation}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-caption-1 text-content-secondary mb-2 uppercase tracking-widest font-semibold">
+                      Confidence
+                    </div>
+                    <div
+                      className={cn(
+                        "text-large-title font-extrabold tracking-tight",
+                        // Use semantic colors and add subtle depth
+                        isHigh
+                          ? "text-semantic-success drop-shadow-sm"
+                          : isMedium
+                            ? "text-semantic-warning drop-shadow-sm"
+                            : "text-content-secondary",
+                      )}
+                    >
+                      {pick.confidence_score}%
+                    </div>
+                    <div className="text-title-3 text-transparent font-mono font-semibold">
+                      &nbsp; {/* Placeholder to align height */}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Key Metrics Grid - Clean, Data-Forward (No Icons for minimalism) */}
+              <div className="grid grid-cols-2 gap-6 mb-8">
+                {/* Metric Box: Expected Value */}
+                <div className="p-6 rounded-xl bg-glass-surface/50 border border-glass-border shadow-sm backdrop-blur-sm">
+                  <span className="block text-caption-1 text-content-secondary uppercase tracking-wider font-semibold mb-2">
+                    Expected Value (EV)
+                  </span>
+                  {/* Typography: Title 1 (28px) Mono */}
+                  <div
+                    className={cn(
+                      "text-title-1 font-bold font-mono tabular-nums",
+                      ev > 0 ? "text-semantic-success" : "text-content-primary",
+                    )}
+                  >
+                    {ev >= 0 ? "+" : ""}
+                    {ev.toFixed(1)}%
+                  </div>
+                </div>
+
+                {/* Metric Box: Fair Line */}
+                <div className="p-6 rounded-xl bg-glass-surface/50 border border-glass-border shadow-sm backdrop-blur-sm">
+                  <span className="block text-caption-1 text-content-secondary uppercase tracking-wider font-semibold mb-2">
+                    Model Fair Line
+                  </span>
+                  <div className="text-title-1 font-bold font-mono text-content-primary tabular-nums">
+                    {fairLine > 0 ? "+" : ""}
+                    {fairLine}
+                  </div>
+                </div>
+              </div>
+
+              {/* Staking Strategy - Precision over Icons */}
+              <div className="mb-8">
+                <h3 className="text-title-3 font-bold text-content-primary mb-4">Staking Strategy</h3>
+                <div className="space-y-3">
+                  {/* Recommended Band - Emphasized using Accent color for clarity */}
+                  <div className="flex justify-between items-center p-5 rounded-xl border border-accent/50 bg-accent/10 shadow-md">
+                    <span className="text-body font-bold text-content-primary">Conservative (1-2% Bankroll)</span>
+                    <span className="text-caption-1 px-3 py-1 rounded-full bg-accent text-content-inverse font-bold uppercase tracking-wider">
+                      Optimal
+                    </span>
+                  </div>
+                  {/* Other Bands - De-emphasized */}
+                  <div className="flex justify-between items-center p-5 rounded-xl border border-glass-border bg-glass-surface/50 opacity-70">
+                    <span className="text-body font-medium text-content-secondary">Moderate (2-3% Bankroll)</span>
+                    <span className="text-caption-1 text-content-tertiary">Increased Risk</span>
+                  </div>
+                  <div className="flex justify-between items-center p-5 rounded-xl border border-glass-border bg-glass-surface/50 opacity-50">
+                    <span className="text-body font-medium text-content-secondary">Aggressive (3-5% Bankroll)</span>
+                    <span className="text-caption-1 text-content-tertiary">High Risk</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Reasoning */}
+              <div>
+                <h3 className="text-title-3 font-bold text-content-primary mb-4">Detailed Analysis</h3>
+                {/* Typography: Body (16px) for readability. Using prose utilities if available. */}
+                <div className="text-body text-content-primary leading-relaxed whitespace-pre-wrap prose dark:prose-invert max-w-none">
+                  {pick.reasoning_text}
+                </div>
+              </div>
+
+              {/* Timestamp */}
+              <div className="flex items-center gap-2 text-caption-2 text-content-tertiary pt-8 mt-8 border-t border-glass-border">
+                <Clock size={12} strokeWidth={2} />
+                <span>Generated {new Date(pick.created_at).toLocaleString()}</span>
+              </div>
+            </ScrollArea>
+
+            {/* AI Chat Panel - Refined styling */}
+            {showAIChat && (
+              <div className="w-full lg:w-1/3 border-l border-glass-border flex flex-col bg-surface-secondary/20">
+                <div className="p-5 border-b border-glass-border">
+                  <h3 className="font-semibold text-body-sm text-content-primary flex items-center gap-2">
+                    <MessageSquare size={16} className="text-accent" strokeWidth={2.5} />
+                    Ask AI Insights
+                  </h3>
+                  <p className="text-caption-1 text-content-secondary mt-1">
+                    Explore alternate angles or get deeper context.
+                  </p>
+                </div>
+
+                <ScrollArea className="flex-1 p-5">
+                  <div className="space-y-4">
+                    {chatMessages.length === 0 && (
+                      <div className="text-center text-body-sm text-content-secondary py-8">
+                        Start a conversation about this pick.
+                      </div>
+                    )}
+                    {chatMessages.map((msg, idx) => (
+                      <div
+                        key={idx}
+                        className={cn(
+                          "p-4 rounded-xl text-body-sm leading-relaxed",
+                          msg.role === "user"
+                            ? "bg-accent text-content-inverse ml-8 shadow-md"
+                            : // Using Glass surface for assistant messages
+                              "bg-glass-surface text-content-primary mr-8 border border-glass-border shadow-sm",
+                        )}
+                      >
+                        {msg.content}
+                      </div>
+                    ))}
+                    {isAILoading && (
+                      // Using a more subtle loading indicator (Activity spinner)
+                      <div className="flex items-center gap-2 p-4 rounded-xl bg-glass-surface text-content-secondary mr-8 border border-glass-border">
+                        <Activity size={14} className="text-accent animate-spin" />
+                        <span>Analyzing...</span>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+                </ScrollArea>
+
+                <div className="p-5 border-t border-glass-border">
+                  <div className="flex gap-3">
+                    <Textarea
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      placeholder="Ask a question..."
+                      // Styling the Textarea to fit the glass theme
+                      className="resize-none min-h-[60px] text-body-sm bg-glass-surface/70 border-glass-border focus-visible:ring-accent"
+                      disabled={isAILoading}
+                    />
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!inputMessage.trim() || isAILoading}
+                      size="icon"
+                      className="shrink-0 bg-accent hover:bg-accent-hover text-content-inverse rounded-xl"
+                    >
+                      <Send size={16} strokeWidth={2.5} />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// ============================================================================
+// GAME CARD COMPONENT - ESSENCE v3.1 Unified Interaction
 // ============================================================================
 
 interface GameCardProps {
@@ -296,8 +651,7 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
   const { toast } = useToast();
   const awayTeamName = awayTeam;
   const homeTeamName = homeTeam;
-  
-  // Use existing pick data from game
+
   const pickData = game.pick;
 
   // State calculations (Logic unchanged)
@@ -335,13 +689,12 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
     const homeML = parseInt(odds.homeML, 10) || 0;
     let mlFavorite: "away" | "home" | null = null;
 
-    // The lower number (more negative or less positive) is always the favorite in American odds.
     if (awayML !== 0 && homeML !== 0 && awayML !== homeML) {
       if (awayML < homeML) mlFavorite = "away";
       else if (homeML < awayML) mlFavorite = "home";
     }
 
-    return { ...odds, awayPL, homePL, total, mlFavorite, movement: {} as any }; // Movement logic omitted
+    return { ...odds, awayPL, homePL, total, mlFavorite, movement: {} as any };
   }, [odds]);
 
   const hasOdds = processedOdds !== null;
@@ -349,7 +702,7 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
 
   const spreadLabel = league === "NHL" ? "Puck Line" : "Spread";
 
-  // Handlers (Logic mostly unchanged, updated toast calls)
+  // Handlers (Logic unchanged)
   const handleAnalyzeClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -381,22 +734,18 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
     [boardLocked, toast],
   );
 
-  // ESSENCE v3.0 Implementation: Glass Materiality for the main card.
   return (
     <article
-      // Radius: 2xl (24px), Shadow: lg -> xl on hover. Motion: duration-250, ease-standard.
-      // Materiality: bg-glass-surface, backdrop-blur-xl, border-glass-border.
       className="relative overflow-hidden mb-4 rounded-2xl border border-glass-border group/card transition-all duration-250 ease-standard hover:shadow-xl shadow-lg backdrop-blur-xl bg-glass-surface backdrop-saturate-default motion-safe:hover:scale-[1.005]"
       style={{ willChange: "transform" }}
     >
-      {/* Subtle interactive highlight */}
       <div
         className="absolute inset-0 bg-gradient-to-br from-accent/0 via-accent/0 to-accent/5 opacity-0 group-hover/card:opacity-100 transition-opacity duration-700 pointer-events-none"
         aria-hidden="true"
       />
 
       <div className="flex flex-col md:flex-row relative z-10">
-        {/* Game Information Section - Padding 6 (24px) */}
+        {/* Game Information Section */}
         <div className="flex-1 p-6 relative">
           {!isConcluded && (
             <div className="absolute top-6 right-6 z-10">
@@ -404,24 +753,20 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
             </div>
           )}
 
-          {/* Gap 6 (24px) between rows */}
           <div className="flex flex-col justify-center h-full gap-6 pt-8 md:pt-0" role="grid">
             {/* Away Team Row */}
             <div className="flex items-center justify-between" role="row">
               <div className="flex items-center gap-4" role="gridcell">
                 <TeamLogo teamAbbr={awayTeam} teamName={awayTeamName} league={league} />
                 <div className="flex flex-col">
-                  {/* Typography: title-3 (20px) for team name */}
                   <span
                     className={cn(
                       "text-title-3 font-bold tracking-tight transition-colors duration-300",
-                      // Dimming the loser in Final state
                       winner === "home" ? "text-content-secondary opacity-70" : "text-content-primary",
                     )}
                   >
                     {awayTeam}
                   </span>
-                  {/* Typography: caption-1 (12px) for record */}
                   {awayRecord && (
                     <span className="text-caption-1 font-semibold text-content-secondary tracking-wide">
                       {awayRecord}
@@ -430,7 +775,6 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
                 </div>
               </div>
               {showScores && (
-                // Typography: large-title (36px) for score, SF Mono (font-mono), tabular-nums
                 <span
                   className={cn(
                     "text-large-title font-mono font-bold tabular-nums transition-colors duration-300",
@@ -443,7 +787,6 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
               )}
             </div>
 
-            {/* Divider */}
             <div className="w-full h-px bg-glass-border" aria-hidden="true" />
 
             {/* Home Team Row */}
@@ -480,69 +823,69 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
             </div>
           </div>
 
-          {/* Action Buttons (Hidden until hover - Calm Technology) */}
-          {/* Motion: Fade in and slight vertical translation (duration-400, ease-decelerate) */}
+          {/* Action Buttons (Hidden until hover) */}
           {!isConcluded && (
-            <div className="absolute bottom-6 right-6 flex gap-2 opacity-0 motion-safe:translate-y-3 group-hover/card:opacity-100 group-hover/card:motion-safe:translate-y-0 transition-all duration-400 ease-decelerate focus-within:opacity-100 focus-within:translate-y-0">
-              {/* ESSENCE Button Style: Glass Variant for secondary action */}
+            // Increased gap to 3 for better spacing
+            <div className="absolute bottom-6 right-6 flex gap-3 opacity-0 motion-safe:translate-y-3 group-hover/card:opacity-100 group-hover/card:motion-safe:translate-y-0 transition-all duration-400 ease-decelerate focus-within:opacity-100 focus-within:translate-y-0">
+              {/* Analyze Button (Unchanged) */}
               {onAnalyze && (
                 <button
                   onClick={handleAnalyzeClick}
-                  // Applying Glass button styles
-                  className="bg-glass-surface backdrop-blur-lg border border-glass-border hover:shadow-md text-content-primary px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard"
+                  // Increased py from 2.5 to 3 for better height alignment with the new unified button
+                  className="bg-glass-surface backdrop-blur-lg border border-glass-border hover:shadow-md text-content-primary px-5 py-3 rounded-xl flex items-center gap-2.5 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard"
                 >
                   <TrendingUp size={16} strokeWidth={2.5} className="text-accent" />
-                  {/* Typography: body-sm (14px) */}
                   <span className="text-body-sm font-bold">Analyze</span>
                 </button>
               )}
 
-              {/* Edge Display & Breakdown Button */}
+              {/* Unified Edge & Breakdown Button (Premium Aesthetic) */}
               {pickData && (
-                <div className="flex items-center gap-3">
-                  {/* Edge Indicator */}
-                  <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-glass-surface/50 border border-accent/30">
-                    <TrendingUp size={16} className="text-accent" />
-                    <div className="flex flex-col">
-                      <span className="text-caption-2 text-content-secondary uppercase tracking-wider font-semibold">
-                        Edge
-                      </span>
-                      <span className="text-body font-bold font-mono text-accent">
-                        {pickData.confidence_score}%
-                      </span>
-                    </div>
-                    <div className="h-6 w-px bg-border/50 mx-1" />
-                    <span className="text-body-sm font-semibold text-content-primary">
-                      {pickData.pick_side}
+                <button
+                  onClick={handleOpenBreakdown}
+                  disabled={boardLocked}
+                  // A premium, emphasized button combining the edge info and the action.
+                  // Uses the accent color, maintaining high saturation and materiality.
+                  className="group/edgebutton bg-accent hover:bg-accent-hover text-content-inverse px-5 py-3 rounded-xl shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard disabled:opacity-50 disabled:pointer-events-none flex items-center gap-4 backdrop-saturate-150"
+                >
+                  {/* Edge visualization */}
+                  <div className="flex flex-col items-start">
+                    <span className="text-caption-2 uppercase tracking-wider font-semibold text-content-inverse/70">
+                      Edge
                     </span>
+                    <span className="text-body font-bold font-mono">{pickData.confidence_score}%</span>
                   </div>
 
-                  {/* Breakdown Button */}
-                  <button
-                    onClick={handleOpenBreakdown}
-                    disabled={boardLocked}
-                    className="bg-accent text-content-inverse hover:bg-accent-hover px-5 py-2.5 rounded-xl flex items-center gap-2.5 shadow-md hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:hover:scale-105 active:scale-95 transition-all duration-150 ease-standard disabled:opacity-50 disabled:pointer-events-none"
-                  >
-                    <Sparkles size={16} strokeWidth={2.5} />
-                    <span className="text-body-sm font-bold">Breakdown</span>
-                  </button>
-                </div>
+                  <div className="h-6 w-px bg-content-inverse/30" aria-hidden="true" />
+
+                  {/* The Pick */}
+                  <div className="flex flex-col items-start">
+                    <span className="text-caption-2 uppercase tracking-wider font-semibold text-content-inverse/70">
+                      Pick
+                    </span>
+                    <span className="text-body font-bold">{pickData.pick_side}</span>
+                  </div>
+
+                  {/* Subtle Icon/Indicator for interaction, emphasizing movement on hover */}
+                  <ChevronRight
+                    size={16}
+                    strokeWidth={3}
+                    className="ml-2 text-content-inverse/70 group-hover/edgebutton:text-content-inverse transition-transform duration-200 ease-standard group-hover/edgebutton:translate-x-1"
+                  />
+                </button>
               )}
 
-              {/* No Edge Available */}
-              {!pickData && !boardLocked && (
-                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-glass-surface/30 border border-border/30">
-                  <span className="text-body-sm text-content-secondary">
-                    No edge identified
-                  </span>
+              {/* No Edge Available (Only shown if no analysis button either, adjusted logic slightly) */}
+              {!pickData && !boardLocked && !onAnalyze && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-glass-surface/30 border border-border/30">
+                  <span className="text-body-sm text-content-secondary">No edge identified</span>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Odds Board Section */}
-        {/* Subtle background variation (surface-secondary/30) to define the area within the glass card */}
+        {/* Odds Board Section (Unchanged) */}
         <div className="relative bg-surface-secondary/30 p-6 md:w-[380px] flex flex-col justify-center border-t md:border-t-0 md:border-l border-glass-border">
           {/* Locked Board Overlay */}
           {boardLocked && (
@@ -556,22 +899,26 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
                   </p>
                   {winner && winner !== "tie" && processedOdds?.awayPL.line !== "-" && (
                     <p className="text-caption-2 text-content-secondary">
-                      {winner === "away" ? awayTeam : homeTeam} covered{" "}
-                      the {winner === "away" ? processedOdds.awayPL.line : processedOdds.homePL.line} spread
+                      {winner === "away" ? awayTeam : homeTeam} covered the{" "}
+                      {winner === "away" ? processedOdds.awayPL.line : processedOdds.homePL.line} spread
                     </p>
                   )}
                   {processedOdds && (
                     <div className="pt-2 border-t border-glass-border/30 mt-2 space-y-0.5">
-                      <p className="text-caption-2 font-semibold text-content-tertiary uppercase tracking-wider">Closing Line</p>
+                      <p className="text-caption-2 font-semibold text-content-tertiary uppercase tracking-wider">
+                        Closing Line
+                      </p>
                       <div className="flex gap-3 justify-center text-caption-2 text-content-secondary font-mono">
                         {processedOdds.awayPL.line !== "-" && (
-                          <span>{spreadLabel}: {processedOdds.awayPL.line}/{processedOdds.homePL.line}</span>
+                          <span>
+                            {spreadLabel}: {processedOdds.awayPL.line}/{processedOdds.homePL.line}
+                          </span>
                         )}
-                        {processedOdds.total !== "-" && (
-                          <span>O/U: {processedOdds.total}</span>
-                        )}
+                        {processedOdds.total !== "-" && <span>O/U: {processedOdds.total}</span>}
                         {processedOdds.awayML && processedOdds.homeML && (
-                          <span>ML: {processedOdds.awayML}/{processedOdds.homeML}</span>
+                          <span>
+                            ML: {processedOdds.awayML}/{processedOdds.homeML}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -586,7 +933,6 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
           <div role="grid">
             {/* Headers */}
             <div className="grid grid-cols-3 gap-3 mb-4 px-1" role="row">
-              {/* Typography: caption-2 (11px), uppercase, wide tracking */}
               <span
                 className="text-caption-2 font-extrabold text-content-tertiary uppercase tracking-widest text-center"
                 role="columnheader"
@@ -662,14 +1008,84 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
 
       {/* Pick Detail Modal (Portal) */}
       {pickData && (
-        <PickDetailModal
-          pick={pickData}
-          game={game}
-          isOpen={showPickModal}
-          onClose={() => setShowPickModal(false)}
-        />
+        <PickDetailModal pick={pickData} game={game} isOpen={showPickModal} onClose={() => setShowPickModal(false)} />
       )}
     </article>
   );
 });
 GameCard.displayName = "GameCard";
+
+// ============================================================================
+// PICK DISPLAY COMPONENT - ESSENCE v3.1 Alignment
+// ============================================================================
+
+interface PickDisplayProps {
+  pick: PickData;
+  isLoading?: boolean;
+  onClick?: () => void;
+}
+
+export const PickDisplay: React.FC<PickDisplayProps> = ({ pick, isLoading = false, onClick }) => {
+  if (isLoading) {
+    return (
+      // ESSENCE Loading State Alignment
+      <div className="p-4 rounded-xl bg-glass-surface/50 border border-glass-border animate-pulse">
+        <div className="flex items-center justify-between mb-2">
+          <div className="h-5 w-24 rounded bg-surface-secondary/50"></div>
+          <div className="h-4 w-12 rounded-full bg-surface-secondary/50"></div>
+        </div>
+        <div className="h-3 w-32 rounded bg-surface-secondary/30"></div>
+      </div>
+    );
+  }
+
+  // ESSENCE Semantic Colors
+  const isHigh = pick.confidence_score >= 70;
+  const isMedium = pick.confidence_score >= 50 && pick.confidence_score < 70;
+
+  return (
+    // ESSENCE Interactive Glass styling
+    <button
+      onClick={onClick}
+      className="w-full p-4 rounded-xl bg-glass-surface/70 border border-glass-border hover:border-content-tertiary/50 hover:bg-glass-surface transition-all duration-200 ease-standard text-left group shadow-sm hover:shadow-md backdrop-blur-md"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-3">
+          {/* Typography: Title 3 (20px) */}
+          <span className="text-title-3 font-bold tracking-tight text-content-primary">{pick.pick_side}</span>
+          {/* Typography: Body-sm (14px) Mono */}
+          <span className="text-body-sm text-content-secondary font-mono font-medium">
+            {pick.odds_at_generation > 0 ? "+" : ""}
+            {pick.odds_at_generation}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className={cn(
+              "px-3 py-1 rounded-full border text-caption-1 font-bold tracking-wide",
+              // Updated semantic color usage
+              isHigh
+                ? "bg-semantic-success/15 border-semantic-success/40 text-semantic-success"
+                : isMedium
+                  ? "bg-semantic-warning/20 border-semantic-warning/50 text-semantic-warning"
+                  : "bg-surface-secondary/50 border-surface-tertiary text-content-secondary",
+            )}
+          >
+            {pick.confidence_score}%
+          </div>
+          {/* Refined interaction cue */}
+          <ChevronRight
+            size={16}
+            className="text-content-tertiary group-hover:text-content-primary transition-all duration-200 ease-standard group-hover:translate-x-0.5"
+            strokeWidth={3}
+          />
+        </div>
+      </div>
+
+      {/* Typography: Caption 1 (12px) */}
+      <div className="text-caption-1 text-content-secondary group-hover:text-content-primary transition-colors duration-200 ease-standard">
+        View detailed analysis
+      </div>
+    </button>
+  );
+};
