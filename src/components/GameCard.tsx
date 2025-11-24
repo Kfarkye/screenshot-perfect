@@ -408,9 +408,11 @@ export const GameCard = React.memo(({ game, selectedBook, onAnalyze, onBetClick 
       <div className="flex flex-col md:flex-row relative z-10">
         {/* Game Information Section - Padding 6 (24px) */}
         <div className="flex-1 p-6 relative">
-          <div className="absolute top-6 right-6 z-10">
-            <StatusBadge status={status} time={time} />
-          </div>
+          {!isConcluded && (
+            <div className="absolute top-6 right-6 z-10">
+              <StatusBadge status={status} time={time} />
+            </div>
+          )}
 
           {/* Gap 6 (24px) between rows */}
           <div className="flex flex-col justify-center h-full gap-6 pt-8 md:pt-0" role="grid">
