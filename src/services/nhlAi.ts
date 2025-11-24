@@ -432,6 +432,7 @@ const sendViaRouter = async (userMessage: string, league: League): Promise<strin
   const reader = response.body?.getReader();
   const decoder = new TextDecoder();
   let fullText = '';
+  let currentEvent = '';
 
   if (!reader) {
     throw new Error('No response body reader available');
@@ -446,22 +447,25 @@ const sendViaRouter = async (userMessage: string, league: League): Promise<strin
       const lines = chunk.split('\n');
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
           const dataStr = line.slice(6).trim();
           if (dataStr === '[DONE]') continue;
           
-          try {
-            const jsonData = JSON.parse(dataStr);
-            // Handle different SSE formats
-            if (jsonData.type === 'content' && jsonData.text) {
-              fullText += jsonData.text;
-            } else if (jsonData.choices?.[0]?.delta?.content) {
-              fullText += jsonData.choices[0].delta.content;
-            } else if (jsonData.text) {
-              fullText += jsonData.text;
+          // For 'text' events, data is plain text
+          if (currentEvent === 'text') {
+            fullText += dataStr;
+          } else {
+            // For metadata/done events, data is JSON
+            try {
+              const jsonData = JSON.parse(dataStr);
+              if (jsonData.text) {
+                fullText += jsonData.text;
+              }
+            } catch (e) {
+              // Ignore parse errors
             }
-          } catch (e) {
-            // Ignore parse errors for non-JSON lines
           }
         }
       }
