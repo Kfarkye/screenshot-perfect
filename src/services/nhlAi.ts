@@ -447,9 +447,17 @@ const sendViaRouter = async (userMessage: string, league: League): Promise<strin
 
       for (const line of lines) {
         if (line.startsWith('data: ')) {
+          const dataStr = line.slice(6).trim();
+          if (dataStr === '[DONE]') continue;
+          
           try {
-            const jsonData = JSON.parse(line.slice(6));
-            if (jsonData.type === 'text' && jsonData.text) {
+            const jsonData = JSON.parse(dataStr);
+            // Handle different SSE formats
+            if (jsonData.type === 'content' && jsonData.text) {
+              fullText += jsonData.text;
+            } else if (jsonData.choices?.[0]?.delta?.content) {
+              fullText += jsonData.choices[0].delta.content;
+            } else if (jsonData.text) {
               fullText += jsonData.text;
             }
           } catch (e) {
