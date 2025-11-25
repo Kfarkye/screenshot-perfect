@@ -449,7 +449,7 @@ INSTRUCTIONS:
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface UseWebSearchOptions {
-  provider?: 'tavily' | 'serper' | 'brave' | 'custom';
+  provider?: 'parallel' | 'tavily' | 'serper' | 'brave' | 'custom';
   maxResults?: number;
   enableCache?: boolean;
   autoDetect?: boolean;
@@ -457,7 +457,7 @@ interface UseWebSearchOptions {
 
 export function useWebSearch(options: UseWebSearchOptions = {}) {
   const {
-    provider = 'tavily',
+    provider = 'parallel',
     maxResults = 5,
     enableCache = true,
     autoDetect = true,

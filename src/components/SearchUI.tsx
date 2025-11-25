@@ -476,27 +476,3 @@ export const SearchMessageWrapper: FC<SearchMessageWrapperProps> = React.memo(
 );
 
 SearchMessageWrapper.displayName = 'SearchMessageWrapper';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// EXPORTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-export {
-  SearchIndicator,
-  SearchBadge,
-  CitationPill,
-  SourcesList,
-  InlineCitations,
-  SearchSkeleton,
-  SearchMessageWrapper,
-};
-
-export default {
-  SearchIndicator,
-  SearchBadge,
-  CitationPill,
-  SourcesList,
-  InlineCitations,
-  SearchSkeleton,
-  SearchMessageWrapper,
-};
