@@ -328,8 +328,8 @@ export const fetchSchedule = async (league: League = "NHL", targetDate: Date = n
 
   const diffTime = targetDateStart.getTime() - todayStart.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  // If the target date is today or in the future, we need a window of at least 1 day.
-  const daysFrom = diffDays >= 0 ? diffDays + 1 : 1; // Default to 1 for past dates, relying on dateKey parameter
+  // If the target date is today or in the future, we need a window of at least 7 days (1 week).
+  const daysFrom = diffDays >= 0 ? diffDays + 7 : 7; // Default to 7 days (1 week) for broader data window
 
   try {
     // 3. Parallel Fetching
