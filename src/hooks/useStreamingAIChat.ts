@@ -1,121 +1,161 @@
 // ════════════════════════════════════════════════════════════════════════════
-// STREAMING AI CHAT HOOK [V5 - PRODUCTION HARDENED]
-// Optimized for reliability, performance, and observability in production.
+// STREAMING AI CHAT HOOK [V6 - PRODUCTION]
+// V5 architecture + Unified edge function + Complete patterns
 // ════════════════════════════════════════════════════════════════════════════
 //
 // @metanotes
 // {
-//   "version": "5.0.0",
-//   "architecture": "Router-first multi-model RAG",
-//   "enhancements": [
-//     "useReducer State Management",
-//     "Throttled Stream Updates (Performance)",
-//     "Exponential Backoff Retries (Reliability)",
-//     "API & Context Timeouts (Reliability)",
-//     "Spec-Compliant SSE Parsing (Reliability)",
-//     "Telemetry & TTFT Tracking (Observability)"
-//   ]
+//   "version": "6.0.0",
+//   "architecture": "Router-first → Unified edge function (ai-chat)",
+//   "models": {
+//     "casual": "gpt-5 (openai)",
+//     "analysis": "claude-opus-4-5-20251101 (anthropic)",
+//     "research": "gemini-3-pro-preview (gemini)"
+//   },
+//   "features": [
+//     "useReducer state management",
+//     "Throttled stream updates (80ms)",
+//     "Ref-based content accumulation",
+//     "Timeout protection (API + Context)",
+//     "Spec-compliant SSE parsing",
+//     "Partial content preservation",
+//     "Structured telemetry",
+//     "TTFT tracking"
+//   ],
+//   "edge_function": "ai-chat (handles retries, circuit breakers)"
 // }
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useReducer, useCallback, useRef, useMemo, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { getSportsKnowledge, formatKnowledgeForPrompt } from './useSportsKnowledge';
+import { useReducer, useCallback, useRef, useMemo, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { getSportsKnowledge, formatKnowledgeForPrompt } from "@/services/sportsKnowledge";
 
 // ════════════════════════════════════════════════════════════════════════════
-// CONFIGURATION & CONSTANTS
+// CONFIGURATION
 // ════════════════════════════════════════════════════════════════════════════
 
 const CONFIG = {
   HISTORY_LENGTH: 10,
-  API_TIMEOUT_MS: 20000,
-  CONTEXT_TIMEOUT_MS: 2500,
-  STREAM_UPDATE_THROTTLE_MS: 80,
-  MAX_RETRIES: 2,
-  INITIAL_RETRY_DELAY_MS: 1000,
+  API_TIMEOUT_MS: 60000, // Edge function has 180s, we timeout client at 60s
+  CONTEXT_TIMEOUT_MS: 2500, // RAG fetches timeout
+  STREAM_UPDATE_THROTTLE_MS: 80, // Throttle UI updates during streaming
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-// UTILITIES (Telemetry, Retries, Throttling, Timeouts)
+// TYPES
 // ════════════════════════════════════════════════════════════════════════════
 
-const Telemetry = {
-  trackError: (error: Error | unknown, context: Record<string, any>) => {
-    console.error('[Chat Error]', error, context);
-  },
-  trackEvent: (event: string, properties: Record<string, any>) => {
-    console.log('[Chat Event]', event, properties);
-  }
-};
+export type Intent = "casual" | "analysis" | "research";
+export type Provider = "openai" | "anthropic" | "gemini";
 
-async function retryWithBackoff<T>(
-  fn: (attempt: number) => Promise<T>,
-  retries: number = CONFIG.MAX_RETRIES,
-  delay: number = CONFIG.INITIAL_RETRY_DELAY_MS
-): Promise<T> {
-  let attempt = 1;
-  try {
-    return await fn(attempt);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError' || errorMessage.includes('timeout'))) {
-      throw error;
-    }
-
-    if (retries > 0) {
-      attempt++;
-      Telemetry.trackEvent('API_RETRY', { delay, attemptsLeft: retries, error: errorMessage.substring(0, 100) });
-      await new Promise(res => setTimeout(res, delay));
-      return retryWithBackoff(fn, retries - 1, delay * 2);
-    } else {
-      Telemetry.trackError(error, { stage: 'retryWithBackoff', reason: 'max_retries_reached' });
-      throw new Error('Service temporarily unavailable. Please try again shortly.');
-    }
-  }
+export interface RouteResult {
+  intent: Intent;
+  provider: Provider;
+  injectOdds: boolean;
+  injectKnowledge: boolean;
+  useSearchMode: boolean;
 }
 
+export interface MessageMetadata {
+  provider?: Provider;
+  model?: string;
+  intent?: Intent;
+  taskType?: string;
+  durationMs?: number;
+  ttftMs?: number;
+  knowledgeUsed?: boolean;
+  oddsInjected?: boolean;
+  searchUsed?: boolean;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalCost: number;
+  };
+}
+
+export interface Message {
+  id: string;
+  role: "user" | "assistant" | "error";
+  content: string;
+  timestamp: Date;
+  metadata?: MessageMetadata;
+}
+
+// SSE Event types from edge function
+interface MetadataEvent {
+  provider: string;
+  model: string;
+  taskType: string;
+  reasoning: string;
+  requestId: string;
+  traceId: string;
+}
+
+interface DoneEvent {
+  status: string;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalCost: number;
+  };
+}
+
+interface ErrorEvent {
+  errorType: string;
+  code: string;
+  content: string;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Telemetry wrapper - integrate with Sentry/Datadog/PostHog
+ */
+const Telemetry = {
+  trackError: (error: Error | unknown, context: Record<string, unknown>) => {
+    console.error("[Chat Error]", error, context);
+    // Sentry.captureException(error, { extra: context });
+  },
+  trackEvent: (event: string, properties: Record<string, unknown>) => {
+    console.log("[Chat Event]", event, properties);
+    // PostHog.capture(event, properties);
+  },
+};
+
+/**
+ * Timeout wrapper for promises - graceful degradation
+ */
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   resourceName: string,
-  defaultValue: T
+  defaultValue: T,
 ): Promise<T> {
-  let timeoutId: NodeJS.Timeout;
-  const timeoutPromise = new Promise<T>(resolve => {
+  let timeoutId: ReturnType<typeof setTimeout>;
+
+  const timeoutPromise = new Promise<T>((resolve) => {
     timeoutId = setTimeout(() => {
-      Telemetry.trackEvent('CONTEXT_TIMEOUT', { resource: resourceName, timeoutMs });
+      Telemetry.trackEvent("CONTEXT_TIMEOUT", { resource: resourceName, timeoutMs });
       resolve(defaultValue);
     }, timeoutMs);
   });
 
   return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timeoutId) clearTimeout(timeoutId);
+    clearTimeout(timeoutId);
   });
 }
 
-function combineSignals(...signals: (AbortSignal | undefined)[]): AbortSignal {
-  const controller = new AbortController();
-  
-  for (const signal of signals) {
-    if (!signal) continue;
-
-    if (signal.aborted) {
-      controller.abort(signal.reason);
-      return controller.signal;
-    }
-    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
-  }
-  
-  return controller.signal;
-}
-
-function throttle<T extends (...args: any[]) => void>(func: T, limit: number): T & { flush: () => void } {
+/**
+ * Throttle function with flush capability
+ */
+function throttle<T extends (...args: unknown[]) => void>(func: T, limit: number): T & { flush: () => void } {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let lastArgs: any[] | null = null;
-  let lastThis: any = null;
+  let lastArgs: unknown[] | null = null;
+  let lastThis: unknown = null;
 
-  const throttled = function(this: any, ...args: any[]) {
+  const throttled = function (this: unknown, ...args: unknown[]) {
     lastArgs = args;
     lastThis = this;
 
@@ -145,41 +185,6 @@ function throttle<T extends (...args: any[]) => void>(func: T, limit: number): T
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// TYPES
-// ════════════════════════════════════════════════════════════════════════════
-
-export type Intent = 'casual' | 'analysis' | 'research';
-export type ModelId = 'gemini-3-pro-preview';
-
-export interface RouteResult {
-  intent: Intent;
-  model: ModelId;
-  injectKnowledge: boolean;
-  useWebSearch: boolean;
-}
-
-export interface MessageMetadata {
-  model?: ModelId;
-  intent?: Intent;
-  durationMs?: number;
-  ttftMs?: number;
-  knowledgeUsed?: boolean;
-  searchUsed?: boolean;
-  tokens?: number;
-  retries?: number;
-}
-
-export interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  metadata?: MessageMetadata;
-}
-
-export type ChatMessage = Message;
-
-// ════════════════════════════════════════════════════════════════════════════
 // STATE MANAGEMENT (useReducer)
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -188,7 +193,7 @@ interface ChatState {
   isLoading: boolean;
   isStreaming: boolean;
   error: string | null;
-  currentModel: ModelId | null;
+  currentProvider: Provider | null;
 }
 
 const initialState: ChatState = {
@@ -196,110 +201,128 @@ const initialState: ChatState = {
   isLoading: false,
   isStreaming: false,
   error: null,
-  currentModel: null,
+  currentProvider: null,
 };
 
 type ChatAction =
-  | { type: 'START_REQUEST'; userMessage: Message; assistantPlaceholder: Message }
-  | { type: 'ROUTING_COMPLETE'; model: ModelId }
-  | { type: 'STREAM_START'; messageId: string; ttftMs: number }
-  | { type: 'STREAM_UPDATE'; messageId: string; content: string }
-  | { type: 'REQUEST_SUCCESS'; messageId: string; finalContent: string; metadata: MessageMetadata }
-  | { type: 'REQUEST_ERROR'; error: string; messageId: string }
-  | { type: 'CANCEL_OR_TIMEOUT'; messageId: string; partialContent: string }
-  | { type: 'PREPARE_RETRY'; messages: Message[] }
-  | { type: 'CLEAR' };
+  | { type: "START_REQUEST"; userMessage: Message; assistantPlaceholder: Message }
+  | { type: "ROUTING_COMPLETE"; provider: Provider }
+  | { type: "STREAM_START"; messageId: string; ttftMs: number }
+  | { type: "STREAM_UPDATE"; messageId: string; content: string }
+  | { type: "STREAM_METADATA"; messageId: string; metadata: Partial<MessageMetadata> }
+  | { type: "REQUEST_SUCCESS"; messageId: string; finalContent: string; metadata: MessageMetadata }
+  | { type: "REQUEST_ERROR"; error: string; messageId: string }
+  | { type: "CANCEL_OR_TIMEOUT"; messageId: string; partialContent: string }
+  | { type: "PREPARE_RETRY"; messages: Message[] }
+  | { type: "CLEAR" };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
-    case 'START_REQUEST':
+    case "START_REQUEST":
       return {
         ...state,
         messages: [...state.messages, action.userMessage, action.assistantPlaceholder],
         isLoading: true,
+        isStreaming: false,
         error: null,
       };
-    case 'ROUTING_COMPLETE':
-      return { ...state, currentModel: action.model };
-    case 'STREAM_START':
+
+    case "ROUTING_COMPLETE":
+      return { ...state, currentProvider: action.provider };
+
+    case "STREAM_START":
       return {
         ...state,
         isStreaming: true,
-        messages: state.messages.map(msg =>
-          msg.id === action.messageId
-            ? { ...msg, metadata: { ...msg.metadata, ttftMs: action.ttftMs } }
-            : msg
+        messages: state.messages.map((msg) =>
+          msg.id === action.messageId ? { ...msg, metadata: { ...msg.metadata, ttftMs: action.ttftMs } } : msg,
         ),
       };
-    case 'STREAM_UPDATE':
+
+    case "STREAM_UPDATE":
       return {
         ...state,
-        messages: state.messages.map(msg =>
-          msg.id === action.messageId
-            ? { ...msg, content: action.content }
-            : msg
+        messages: state.messages.map((msg) =>
+          msg.id === action.messageId ? { ...msg, content: action.content } : msg,
         ),
       };
-    case 'REQUEST_SUCCESS':
+
+    case "STREAM_METADATA":
+      return {
+        ...state,
+        messages: state.messages.map((msg) =>
+          msg.id === action.messageId ? { ...msg, metadata: { ...msg.metadata, ...action.metadata } } : msg,
+        ),
+      };
+
+    case "REQUEST_SUCCESS":
       return {
         ...state,
         isLoading: false,
         isStreaming: false,
-        currentModel: null,
-        messages: state.messages.map(msg =>
+        currentProvider: null,
+        messages: state.messages.map((msg) =>
           msg.id === action.messageId
             ? { ...msg, content: action.finalContent, metadata: { ...msg.metadata, ...action.metadata } }
-            : msg
+            : msg,
         ),
       };
-    case 'REQUEST_ERROR':
+
+    case "REQUEST_ERROR":
       return {
         ...state,
         isLoading: false,
         isStreaming: false,
         error: action.error,
-        currentModel: null,
-        messages: state.messages.map(msg =>
-          msg.id === action.messageId
-            ? { ...msg, content: `Error: ${action.error}` }
-            : msg
+        currentProvider: null,
+        messages: state.messages.map((msg) =>
+          msg.id === action.messageId ? { ...msg, role: "error" as const, content: `Error: ${action.error}` } : msg,
         ),
       };
-    case 'CANCEL_OR_TIMEOUT':
+
+    case "CANCEL_OR_TIMEOUT":
       const messagesAfterInterrupt = action.partialContent
-        ? state.messages.map(msg =>
-            msg.id === action.messageId ? { ...msg, content: action.partialContent } : msg
-          )
-        : state.messages.filter(m => m.id !== action.messageId);
+        ? state.messages.map((msg) => (msg.id === action.messageId ? { ...msg, content: action.partialContent } : msg))
+        : state.messages.filter((m) => m.id !== action.messageId);
 
       return {
         ...state,
         isLoading: false,
         isStreaming: false,
-        currentModel: null,
+        currentProvider: null,
         messages: messagesAfterInterrupt,
       };
-    case 'PREPARE_RETRY':
+
+    case "PREPARE_RETRY":
       return {
         ...state,
         messages: action.messages,
         error: null,
         isLoading: false,
       };
-    case 'CLEAR':
+
+    case "CLEAR":
       return initialState;
+
     default:
       return state;
   }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ROUTER
+// ROUTER (Client-side Intent Detection)
 // ════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Client-side intent detection and provider routing
+ * Runs in <5ms - no LLM call needed
+ */
 export function routeMessage(message: string): RouteResult {
   const lower = message.toLowerCase().trim();
-  
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RESEARCH - Needs fresh/unknown data → Gemini (handles web search)
+  // ─────────────────────────────────────────────────────────────────────────
   const researchPatterns = [
     /\b(news|latest|recent|just happened|today|tonight|yesterday)\b/,
     /\b(breaking|announced|confirmed|reportedly|rumor|report)\b/,
@@ -309,7 +332,10 @@ export function routeMessage(message: string): RouteResult {
     /\b(when is|when does|what time|where is|how much|how many)\b.*\?/,
     /\b(current|right now|at the moment|as of)\b/,
   ];
-  
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ANALYSIS - Betting/picks (we have odds + DB data) → Claude
+  // ─────────────────────────────────────────────────────────────────────────
   const analysisPatterns = [
     /\b(pick|picks|bet|bets|betting|spread|spreads|over|under|o\/u)\b/,
     /\b(parlay|parlays|teaser|moneyline|ml|total|totals|line|lines)\b/,
@@ -323,7 +349,10 @@ export function routeMessage(message: string): RouteResult {
     /\b(matchup|vs|versus|against|facing|playing)\b.*\b(tonight|today|tomorrow)\b/,
     /\b(preview|breakdown|analysis|analyze|look at)\b/,
   ];
-  
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // KNOWLEDGE - Roster/trade/injury DB lookup → Claude (fast, no search)
+  // ─────────────────────────────────────────────────────────────────────────
   const knowledgePatterns = [
     /\b(what team is|what team does|who plays for|where does .* play)\b/,
     /\b(play for|plays for|signed with|joined|on the)\b/,
@@ -334,239 +363,156 @@ export function routeMessage(message: string): RouteResult {
     /\b(injury|injuries|injured|hurt|sidelined)\b/,
     /\b(how tall|how old|what position|jersey number|contract)\b/,
   ];
-  
-  if (researchPatterns.some(p => p.test(lower))) {
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ROUTING LOGIC - Check in order of specificity
+  // ─────────────────────────────────────────────────────────────────────────
+
+  if (researchPatterns.some((p) => p.test(lower))) {
     return {
-      intent: 'research',
-      model: 'gemini-3-pro-preview',
+      intent: "research",
+      provider: "gemini",
+      injectOdds: false,
       injectKnowledge: true,
-      useWebSearch: false,
+      useSearchMode: true,
     };
   }
-  
-  if (analysisPatterns.some(p => p.test(lower))) {
+
+  if (analysisPatterns.some((p) => p.test(lower))) {
     return {
-      intent: 'analysis',
-      model: 'gemini-3-pro-preview',
+      intent: "analysis",
+      provider: "anthropic",
+      injectOdds: true,
       injectKnowledge: true,
-      useWebSearch: false,
+      useSearchMode: false,
     };
   }
-  
-  if (knowledgePatterns.some(p => p.test(lower))) {
+
+  if (knowledgePatterns.some((p) => p.test(lower))) {
     return {
-      intent: 'analysis',
-      model: 'gemini-3-pro-preview',
+      intent: "analysis",
+      provider: "anthropic",
+      injectOdds: false,
       injectKnowledge: true,
-      useWebSearch: false,
+      useSearchMode: false,
     };
   }
-  
+
+  // Default: casual chat → GPT-5 (fastest, no injection)
   return {
-    intent: 'casual',
-    model: 'gemini-3-pro-preview',
+    intent: "casual",
+    provider: "openai",
+    injectOdds: false,
     injectKnowledge: false,
-    useWebSearch: false,
+    useSearchMode: false,
   };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SYSTEM PROMPTS
+// CONTEXT INJECTION (RAG Pipeline)
 // ════════════════════════════════════════════════════════════════════════════
 
-const SYSTEM_PROMPTS = {
-  casual: `You are SharpEdge, a chill sports betting assistant.
+/**
+ * Get current odds injection with timeout protection
+ */
+async function getOddsContext(): Promise<string> {
+  const startTime = performance.now();
 
-PERSONALITY:
-- Friendly, casual, conversational
-- Use natural language
-- Match the user's energy
-- Keep responses concise unless they want more
+  const fetchOdds = async (): Promise<string> => {
+    try {
+      const { data, error } = await supabase.functions.invoke("get-current-odds", {
+        body: { leagues: ["NBA", "NFL"], includeProps: false },
+      });
 
-RULES:
-- Chat naturally
-- If they pivot to betting, give quick takes but suggest they ask specifically for analysis
-- Be helpful and fun`,
+      const durationMs = performance.now() - startTime;
 
-  analysis: (context: string) => `You are SharpEdge, an elite sports betting analyst.
+      if (error || !data) {
+        Telemetry.trackError(error || new Error("Odds data missing"), { durationMs, stage: "odds" });
+        return "";
+      }
 
-${context}
+      Telemetry.trackEvent("RAG_ODDS_SUCCESS", { durationMs });
 
-RULES:
-1. Use verified data above over your training knowledge
-2. Give direct, confident picks with clear reasoning
-3. Be conversational but sharp
-4. Include specific numbers: spreads, lines, percentages
-5. If asked about a player's team, use ONLY the verified data above
+      return `
+══════════════════════════════════════════════════════════════
+📊 LIVE ODDS (${new Date().toLocaleTimeString()})
+══════════════════════════════════════════════════════════════
+${data.formatted || JSON.stringify(data.odds, null, 2)}
+══════════════════════════════════════════════════════════════`;
+    } catch (err) {
+      Telemetry.trackError(err, { stage: "odds_fetch" });
+      return "";
+    }
+  };
 
-FORMAT FOR PICKS:
-🎯 [PICK]: Team/Player and line
-📊 [WHY]: 2-3 bullet reasons
-⚠️ [RISK]: One sentence on what could go wrong
-💰 [CONFIDENCE]: Low/Medium/High
+  return withTimeout(fetchOdds(), CONFIG.CONTEXT_TIMEOUT_MS, "Odds", "");
+}
 
-Keep it tight.`,
-
-  research: (context: string) => `You are SharpEdge research assistant.
-
-${context}
-
-RULES:
-1. Search for current, accurate information
-2. If verified data is provided above, use it as baseline
-3. Supplement with web search for breaking news, updates, context
-4. Be clear about what's confirmed vs rumored
-5. Synthesize findings into clear, actionable insights
-
-FORMAT:
-- Lead with the key finding
-- Provide context
-- Note any conflicting information
-- End with betting relevance if applicable`,
-};
-
-// ════════════════════════════════════════════════════════════════════════════
-// CONTEXT BUILDERS
-// ════════════════════════════════════════════════════════════════════════════
-
-async function getKnowledgeInjection(query: string): Promise<string> {
+/**
+ * Get knowledge base context with timeout protection
+ */
+async function getKnowledgeContext(query: string): Promise<string> {
   const startTime = performance.now();
 
   const fetchKnowledge = async (): Promise<string> => {
     try {
-      const knowledgeEntries = await getSportsKnowledge(query);
-      
+      const result = await getSportsKnowledge(query, {
+        league: "NBA",
+        limit: 5,
+        minConfidence: 0.7,
+      });
+
       const durationMs = performance.now() - startTime;
 
-      if (knowledgeEntries.length === 0) {
-        Telemetry.trackEvent('RAG_KNOWLEDGE_MISS', { durationMs });
-        return '';
+      if (!result || result.entries.length === 0) {
+        Telemetry.trackEvent("RAG_KNOWLEDGE_MISS", { durationMs });
+        return "";
       }
 
-      console.log(`[Chat] Knowledge hit: ${knowledgeEntries.length} entries in ${durationMs}ms`);
-      Telemetry.trackEvent('RAG_KNOWLEDGE_HIT', { durationMs, entries: knowledgeEntries.length });
+      Telemetry.trackEvent("RAG_KNOWLEDGE_HIT", { durationMs, entries: result.entries.length });
 
-      return formatKnowledgeForPrompt(knowledgeEntries);
+      return formatKnowledgeForPrompt(result.entries, {
+        verbose: true,
+        includeSource: true,
+      });
     } catch (err) {
-      const durationMs = performance.now() - startTime;
-      Telemetry.trackError(err, { durationMs, stage: 'knowledge_injection_catch' });
-      return '';
+      Telemetry.trackError(err, { stage: "knowledge_fetch" });
+      return "";
     }
   };
 
-  return withTimeout(fetchKnowledge(), CONFIG.CONTEXT_TIMEOUT_MS, 'Knowledge', '');
+  return withTimeout(fetchKnowledge(), CONFIG.CONTEXT_TIMEOUT_MS, "Knowledge", "");
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// MODEL CALLERS
+// SSE STREAM PARSER (Spec-compliant)
 // ════════════════════════════════════════════════════════════════════════════
 
-interface ModelCallOptions {
-  model: ModelId;
-  systemPrompt: string;
-  userMessage: string;
-  conversationHistory: Message[];
-  useWebSearch: boolean;
-  onToken: (token: string) => void;
-  onStreamStart: (ttftMs: number) => void;
-  signal: AbortSignal;
+interface SSECallbacks {
+  onMetadata?: (data: MetadataEvent) => void;
+  onText?: (text: string) => void;
+  onDone?: (data: DoneEvent) => void;
+  onError?: (data: ErrorEvent) => void;
+  onDebug?: (stage: string, details: unknown) => void;
 }
 
-async function callModel(options: ModelCallOptions): Promise<{ content: string, tokens?: number, retries: number }> {
-  const { model, systemPrompt, userMessage, conversationHistory, onToken, onStreamStart, signal } = options;
-
-  const timeoutSignal = AbortSignal.timeout(CONFIG.API_TIMEOUT_MS);
-  const combinedSignal = combineSignals(signal, timeoutSignal);
-
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    ...conversationHistory.slice(-CONFIG.HISTORY_LENGTH).map(m => ({
-      role: m.role,
-      content: m.content,
-    })),
-    { role: 'user', content: userMessage },
-  ];
-
-  let attempts = 0;
-
-  try {
-    const response = await retryWithBackoff(async (attempt) => {
-      attempts = attempt;
-
-      if (combinedSignal.aborted) {
-        throw combinedSignal.reason;
-      }
-
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-      if (!token) throw new Error("User not authenticated");
-
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat-router`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        body: JSON.stringify({
-          messages,
-          model,
-          preferredProvider: "gemini",
-          stream: true
-        }),
-        signal: combinedSignal,
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text().catch(() => 'Unknown error');
-        throw new Error(`API Error: ${res.status} - ${errorText}`);
-      }
-
-      return res;
-    });
-
-    const retries = attempts - 1;
-
-    if (!response.body) throw new Error('No response body received');
-
-    const streamResult = await processStream(response.body, onToken, onStreamStart, combinedSignal);
-    return { ...streamResult, retries };
-
-  } catch (error) {
-    if (timeoutSignal.aborted && !signal.aborted) {
-      Telemetry.trackError(error, { stage: 'callModel', reason: 'timeout', model });
-      throw new Error(`Request timed out after ${CONFIG.API_TIMEOUT_MS / 1000}s.`);
-    }
-
-    if (signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
-      throw error;
-    }
-    
-    Telemetry.trackError(error, { stage: 'callModel', reason: 'api_error', model });
-    throw error;
-  }
-}
-
-async function processStream(
-  stream: ReadableStream,
-  onToken: (token: string) => void,
-  onStreamStart: (ttftMs: number) => void,
-  signal: AbortSignal
-): Promise<{ content: string, tokens?: number }> {
-  const reader = stream.getReader();
+/**
+ * Spec-compliant SSE parser
+ * Handles buffering, multi-line data, and edge cases
+ */
+async function parseSSEStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  callbacks: SSECallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
   const decoder = new TextDecoder();
-  let fullContent = '';
-  let buffer = '';
-  let finalTokens: number | undefined;
-  let isFirstToken = true;
-  const streamStartTime = performance.now();
+  let buffer = "";
 
   try {
     while (true) {
-      if (signal.aborted) {
-        reader.cancel();
-        throw signal.reason;
+      if (signal?.aborted) {
+        await reader.cancel();
+        break;
       }
 
       const { done, value } = await reader.read();
@@ -574,72 +520,62 @@ async function processStream(
 
       buffer += decoder.decode(value, { stream: true });
 
-      let events = buffer.split('\n\n');
-      buffer = events.pop() || '';
+      // Split on double newline (SSE event separator)
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
 
       for (const event of events) {
         if (!event.trim()) continue;
 
-        const lines = event.split('\n');
-        let dataPayload = '';
+        const lines = event.split("\n");
+        let eventType = "";
+        let dataPayload = "";
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            dataPayload += line.slice(5).trimStart();
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            // Accumulate data (SSE allows multi-line data)
+            dataPayload += line.slice(6);
           }
         }
 
-        if (dataPayload) {
-          if (dataPayload.trim() === '[DONE]') continue;
+        if (!dataPayload) continue;
+        if (dataPayload.trim() === "[DONE]") continue;
 
-          try {
-            const parsed = JSON.parse(dataPayload);
-            const token = extractTokenFromChunk(parsed);
-
-            if (token) {
-              if (isFirstToken) {
-                const ttftMs = Math.round(performance.now() - streamStartTime);
-                onStreamStart(ttftMs);
-                isFirstToken = false;
+        try {
+          switch (eventType) {
+            case "metadata":
+              callbacks.onMetadata?.(JSON.parse(dataPayload));
+              break;
+            case "text":
+              // Text events are plain strings, not JSON
+              callbacks.onText?.(dataPayload);
+              break;
+            case "done":
+              callbacks.onDone?.(JSON.parse(dataPayload));
+              break;
+            case "error":
+              callbacks.onError?.(JSON.parse(dataPayload));
+              break;
+            case "debug":
+              const debugData = JSON.parse(dataPayload);
+              callbacks.onDebug?.(debugData.stage, debugData.details);
+              break;
+            default:
+              // Handle events without explicit type (fallback)
+              if (dataPayload && !eventType) {
+                callbacks.onText?.(dataPayload);
               }
-              fullContent += token;
-              onToken(token);
-            }
-            
-            if (parsed.usage) {
-              finalTokens = parsed.usage.total_tokens || parsed.usage.output_tokens;
-            }
-
-          } catch (err) {
-            Telemetry.trackError(err, { stage: 'processStream_parse', rawData: dataPayload.substring(0, 100) });
           }
+        } catch (e) {
+          Telemetry.trackError(e, { stage: "sse_parse", data: dataPayload.substring(0, 100) });
         }
       }
     }
-  } catch (error) {
-    if (signal.aborted || (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError'))) {
-      throw error;
-    }
-    Telemetry.trackError(error, { stage: 'processStream_read' });
-    throw new Error("Network error during streaming.");
   } finally {
     reader.releaseLock();
   }
-
-  return { content: fullContent, tokens: finalTokens };
-}
-
-function extractTokenFromChunk(chunk: any): string {
-  if (chunk.choices?.[0]?.delta?.content) {
-    return chunk.choices[0].delta.content;
-  }
-  if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
-    return chunk.delta.text;
-  }
-  if (chunk.candidates?.[0]?.content?.parts?.[0]?.text) {
-    return chunk.candidates[0].content.parts[0].text;
-  }
-  return chunk.content || chunk.text || '';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -647,207 +583,316 @@ function extractTokenFromChunk(chunk: any): string {
 // ════════════════════════════════════════════════════════════════════════════
 
 export interface UseStreamingAIChatOptions {
+  conversationId?: string;
   onRouteDetected?: (route: RouteResult) => void;
+  onMetadata?: (metadata: MetadataEvent) => void;
+  onStreamStart?: (provider: Provider) => void;
   onStreamEnd?: (metadata: MessageMetadata) => void;
+  onDebug?: (stage: string, details: unknown) => void;
   onError?: (error: Error) => void;
 }
 
-export function useStreamingAIChat(game?: any, pick?: any, options: UseStreamingAIChatOptions = {}) {
+export function useStreamingAIChat(options: UseStreamingAIChatOptions = {}) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const streamingContentRef = useRef<string>('');
+  // Refs for optimized streaming (no re-render per token)
+  const streamingContentRef = useRef<string>("");
   const currentAssistantIdRef = useRef<string | null>(null);
 
+  // Memoize options
   const memoizedOptions = useMemo(() => options, [options]);
 
+  /**
+   * Throttled state update for streaming content
+   */
   const updateStreamingState = useCallback(() => {
     const assistantId = currentAssistantIdRef.current;
     const content = streamingContentRef.current;
-
-    if (!assistantId) return;
-
-    dispatch({ type: 'STREAM_UPDATE', messageId: assistantId, content });
+    if (assistantId) {
+      dispatch({ type: "STREAM_UPDATE", messageId: assistantId, content });
+    }
   }, []);
 
-  const throttledUpdateStreamingState = useMemo(() => {
-    return throttle(updateStreamingState, CONFIG.STREAM_UPDATE_THROTTLE_MS);
-  }, [updateStreamingState]);
+  const throttledUpdate = useMemo(
+    () => throttle(updateStreamingState, CONFIG.STREAM_UPDATE_THROTTLE_MS),
+    [updateStreamingState],
+  );
 
+  // Cleanup throttle on unmount
   useEffect(() => {
-    return () => {
-      throttledUpdateStreamingState.flush();
-    };
-  }, [throttledUpdateStreamingState]);
+    return () => throttledUpdate.flush();
+  }, [throttledUpdate]);
 
-  const sendMessage = useCallback(async (userMessageContent: string) => {
-    if (!userMessageContent.trim() || state.isLoading) return;
+  /**
+   * Send a message and handle the full lifecycle
+   */
+  const sendMessage = useCallback(
+    async (userMessageContent: string) => {
+      if (!userMessageContent.trim() || state.isLoading) return;
 
-    const startTime = performance.now();
-    const conversationHistory = state.messages;
+      const startTime = performance.now();
+      const conversationHistory = state.messages;
 
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: userMessageContent.trim(),
-      timestamp: new Date(),
-    };
-
-    const assistantMsgId = crypto.randomUUID();
-    const assistantPlaceholder: Message = {
-      id: assistantMsgId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-    };
-
-    streamingContentRef.current = '';
-    currentAssistantIdRef.current = assistantMsgId;
-
-    dispatch({ type: 'START_REQUEST', userMessage: userMsg, assistantPlaceholder });
-
-    abortControllerRef.current = new AbortController();
-    const signal = abortControllerRef.current.signal;
-    let route: RouteResult | null = null;
-
-    try {
-      route = routeMessage(userMessageContent);
-      Telemetry.trackEvent('CHAT_ROUTING', { intent: route.intent, model: route.model });
-      memoizedOptions.onRouteDetected?.(route);
-      dispatch({ type: 'ROUTING_COMPLETE', model: route.model });
-
-      const contextPromises: Promise<string>[] = [];
-
-      if (route.injectKnowledge) {
-        contextPromises.push(getKnowledgeInjection(userMessageContent));
-      }
-
-      const contextResults = await Promise.all(contextPromises);
-      const context = contextResults.filter(Boolean).join('\n\n');
-
-      const knowledgeUsed = route.injectKnowledge && contextResults[0]?.length > 0;
-
-      let systemPrompt: string;
-      switch (route.intent) {
-        case 'analysis':
-          systemPrompt = SYSTEM_PROMPTS.analysis(context);
-          break;
-        case 'research':
-          systemPrompt = SYSTEM_PROMPTS.research(context);
-          break;
-        case 'casual':
-        default:
-          systemPrompt = SYSTEM_PROMPTS.casual;
-      }
-
-      const onStreamStart = (ttftMs: number) => {
-        dispatch({ type: 'STREAM_START', messageId: assistantMsgId, ttftMs });
-        Telemetry.trackEvent('CHAT_TTFT', { model: route!.model, ttftMs });
+      // 1. CREATE MESSAGES
+      const userMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: userMessageContent.trim(),
+        timestamp: new Date(),
       };
 
-      const onToken = (token: string) => {
-        streamingContentRef.current += token;
-        throttledUpdateStreamingState();
+      const assistantMsgId = crypto.randomUUID();
+      const assistantPlaceholder: Message = {
+        id: assistantMsgId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
       };
 
-      const { content: fullContent, tokens, retries } = await callModel({
-        model: route.model,
-        systemPrompt,
-        userMessage: userMessageContent,
-        conversationHistory: conversationHistory,
-        useWebSearch: route.useWebSearch,
-        onToken,
-        onStreamStart,
-        signal,
-      });
+      // Setup streaming refs
+      streamingContentRef.current = "";
+      currentAssistantIdRef.current = assistantMsgId;
 
-      throttledUpdateStreamingState.flush();
+      dispatch({ type: "START_REQUEST", userMessage: userMsg, assistantPlaceholder });
 
-      const durationMs = Math.round(performance.now() - startTime);
+      // Setup abort with timeout
+      abortControllerRef.current = new AbortController();
+      const userSignal = abortControllerRef.current.signal;
+      const timeoutId = setTimeout(() => {
+        abortControllerRef.current?.abort(new Error("Request timeout"));
+      }, CONFIG.API_TIMEOUT_MS);
 
-      const metadata: MessageMetadata = {
-        model: route.model,
-        intent: route.intent,
-        durationMs,
-        knowledgeUsed,
-        searchUsed: route.useWebSearch,
-        tokens,
-        retries,
-      };
+      let route: RouteResult | null = null;
+      let metadata: MetadataEvent | null = null;
+      let usage: DoneEvent["usage"] | null = null;
 
-      dispatch({
-        type: 'REQUEST_SUCCESS',
-        messageId: assistantMsgId,
-        finalContent: fullContent || streamingContentRef.current,
-        metadata
-      });
+      try {
+        // 2. ROUTE MESSAGE
+        route = routeMessage(userMessageContent);
+        Telemetry.trackEvent("CHAT_ROUTING", { intent: route.intent, provider: route.provider });
+        memoizedOptions.onRouteDetected?.(route);
+        dispatch({ type: "ROUTING_COMPLETE", provider: route.provider });
 
-      memoizedOptions.onStreamEnd?.(metadata);
-      Telemetry.trackEvent('CHAT_COMPLETE', metadata);
+        // 3. BUILD CONTEXT (parallel, time-boxed)
+        const contextPromises: Promise<string>[] = [];
 
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error('An unexpected error occurred');
-      const errorMessage = err.message;
+        if (route.injectKnowledge) {
+          contextPromises.push(getKnowledgeContext(userMessageContent));
+        }
+        if (route.injectOdds) {
+          contextPromises.push(getOddsContext());
+        }
 
-      if (signal.aborted || err.name === 'AbortError' || err.name === 'TimeoutError' || errorMessage.includes('timeout')) {
-        const reason = errorMessage.includes('timeout') ? 'timeout' : 'user_cancel';
-        Telemetry.trackEvent('CHAT_INTERRUPTED', { model: route?.model || 'unknown', reason });
-        
-        throttledUpdateStreamingState.flush();
-        const partialContent = streamingContentRef.current;
+        const contextResults = await Promise.all(contextPromises);
 
-        dispatch({ type: 'CANCEL_OR_TIMEOUT', messageId: assistantMsgId, partialContent });
-        return;
+        const knowledgeUsed = route.injectKnowledge && (contextResults[0]?.length ?? 0) > 0;
+        const oddsIndex = route.injectKnowledge ? 1 : 0;
+        const oddsInjected = route.injectOdds && (contextResults[oddsIndex]?.length ?? 0) > 0;
+
+        // 4. BUILD MESSAGES WITH INJECTED CONTEXT
+        const contextPrefix = contextResults.filter(Boolean).join("\n\n");
+        const enhancedUserMessage = contextPrefix
+          ? `${contextPrefix}\n\n---\n\nUser question: ${userMessageContent}`
+          : userMessageContent;
+
+        const apiMessages = [
+          ...conversationHistory.slice(-CONFIG.HISTORY_LENGTH).map((m) => ({
+            role: m.role === "error" ? "assistant" : m.role,
+            content: m.content,
+          })),
+          { role: "user", content: enhancedUserMessage },
+        ];
+
+        // 5. GET AUTH TOKEN
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.access_token) {
+          throw new Error("Not authenticated");
+        }
+
+        // 6. CALL UNIFIED EDGE FUNCTION
+        memoizedOptions.onStreamStart?.(route.provider);
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            messages: apiMessages,
+            conversationId: memoizedOptions.conversationId,
+            preferredProvider: route.provider,
+            mode: route.useSearchMode ? "search_assist" : "chat",
+          }),
+          signal: userSignal,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+
+        if (!response.body) {
+          throw new Error("No response body");
+        }
+
+        // 7. PARSE SSE STREAM
+        const reader = response.body.getReader();
+        let ttftMs = 0;
+        let firstTokenTime = 0;
+
+        await parseSSEStream(
+          reader,
+          {
+            onMetadata: (data) => {
+              metadata = data;
+              memoizedOptions.onMetadata?.(data);
+              dispatch({
+                type: "STREAM_METADATA",
+                messageId: assistantMsgId,
+                metadata: { provider: data.provider as Provider, model: data.model, taskType: data.taskType },
+              });
+              Telemetry.trackEvent("CHAT_METADATA", { provider: data.provider, model: data.model });
+            },
+
+            onText: (text) => {
+              if (!firstTokenTime) {
+                firstTokenTime = performance.now();
+                ttftMs = firstTokenTime - startTime;
+                dispatch({ type: "STREAM_START", messageId: assistantMsgId, ttftMs });
+                Telemetry.trackEvent("CHAT_TTFT", { provider: route!.provider, ttftMs });
+              }
+              streamingContentRef.current += text;
+              throttledUpdate();
+            },
+
+            onDone: (data) => {
+              usage = data.usage;
+            },
+
+            onError: (data) => {
+              Telemetry.trackError(new Error(data.content), { code: data.code, type: data.errorType });
+              throw new Error(data.content || data.code);
+            },
+
+            onDebug: (stage, details) => {
+              memoizedOptions.onDebug?.(stage, details);
+            },
+          },
+          userSignal,
+        );
+
+        // 8. FINALIZE
+        clearTimeout(timeoutId);
+        throttledUpdate.flush();
+
+        const durationMs = Math.round(performance.now() - startTime);
+        const finalMetadata: MessageMetadata = {
+          provider: (metadata?.provider as Provider) || route.provider,
+          model: metadata?.model,
+          intent: route.intent,
+          taskType: metadata?.taskType,
+          durationMs,
+          ttftMs: Math.round(ttftMs),
+          knowledgeUsed,
+          oddsInjected,
+          searchUsed: route.useSearchMode,
+          usage: usage || undefined,
+        };
+
+        dispatch({
+          type: "REQUEST_SUCCESS",
+          messageId: assistantMsgId,
+          finalContent: streamingContentRef.current,
+          metadata: finalMetadata,
+        });
+
+        memoizedOptions.onStreamEnd?.(finalMetadata);
+        Telemetry.trackEvent("CHAT_COMPLETE", finalMetadata);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        const err = error instanceof Error ? error : new Error("Unknown error");
+
+        // Handle cancellation/timeout
+        if (userSignal.aborted || err.name === "AbortError" || err.message.includes("timeout")) {
+          const reason = err.message.includes("timeout") ? "timeout" : "user_cancel";
+          Telemetry.trackEvent("CHAT_INTERRUPTED", { provider: route?.provider, reason });
+
+          throttledUpdate.flush();
+          dispatch({
+            type: "CANCEL_OR_TIMEOUT",
+            messageId: assistantMsgId,
+            partialContent: streamingContentRef.current,
+          });
+          return;
+        }
+
+        // Handle other errors
+        Telemetry.trackError(err, { stage: "sendMessage", provider: route?.provider });
+        memoizedOptions.onError?.(err);
+        dispatch({ type: "REQUEST_ERROR", error: err.message, messageId: assistantMsgId });
+      } finally {
+        abortControllerRef.current = null;
+        currentAssistantIdRef.current = null;
       }
+    },
+    [state.isLoading, state.messages, memoizedOptions, throttledUpdate],
+  );
 
-      Telemetry.trackError(error, { stage: 'sendMessage', model: route?.model });
-      memoizedOptions.onError?.(err);
-
-      dispatch({ type: 'REQUEST_ERROR', error: errorMessage, messageId: assistantMsgId });
-    } finally {
-      abortControllerRef.current = null;
-      currentAssistantIdRef.current = null;
-    }
-  }, [state.isLoading, state.messages, memoizedOptions, throttledUpdateStreamingState]);
-
+  /**
+   * Cancel current request
+   */
   const cancel = useCallback(() => {
     abortControllerRef.current?.abort();
   }, []);
 
-  const resetChat = useCallback(() => {
+  /**
+   * Clear conversation
+   */
+  const clear = useCallback(() => {
     cancel();
-    dispatch({ type: 'CLEAR' });
+    dispatch({ type: "CLEAR" });
   }, [cancel]);
 
+  /**
+   * Retry last message
+   */
   const retry = useCallback(() => {
     if (state.isLoading) return;
 
-    const lastUserMsgIndex = state.messages.map(m => m.role).lastIndexOf('user');
+    const lastUserMsgIndex = state.messages.map((m) => m.role).lastIndexOf("user");
     if (lastUserMsgIndex === -1) return;
 
     const lastUserMsg = state.messages[lastUserMsgIndex];
     const messagesToKeep = state.messages.slice(0, lastUserMsgIndex);
-    dispatch({ type: 'PREPARE_RETRY', messages: messagesToKeep });
-        
+
+    dispatch({ type: "PREPARE_RETRY", messages: messagesToKeep });
     setTimeout(() => sendMessage(lastUserMsg.content), 0);
   }, [state.messages, state.isLoading, sendMessage]);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  return useMemo(() => ({
-    messages: state.messages,
-    isLoading: state.isLoading,
-    isStreaming: state.isStreaming,
-    currentStream: state.messages[state.messages.length - 1]?.content || '',
-    error: state.error,
-    currentModel: state.currentModel,
-    sendMessage,
-    cancel,
-    resetChat,
-    retry,
-    chatEndRef,
-    routeMessage,
-  }), [state, sendMessage, cancel, resetChat, retry]);
+  return useMemo(
+    () => ({
+      messages: state.messages,
+      isLoading: state.isLoading,
+      isStreaming: state.isStreaming,
+      error: state.error,
+      currentProvider: state.currentProvider,
+      sendMessage,
+      cancel,
+      clear,
+      retry,
+      routeMessage,
+    }),
+    [state, sendMessage, cancel, clear, retry],
+  );
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// EXPORTS
+// ════════════════════════════════════════════════════════════════════════════
 
 export default useStreamingAIChat;
