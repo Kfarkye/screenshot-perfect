@@ -34,7 +34,7 @@ import {
   Trash2,
   ChevronDown,
 } from 'lucide-react';
-import { sendChatMessage, type ChatMessage, type StreamCallbacks } from './SearchAugmentedChat';
+import { sendChatMessage, type ChatMessage, type StreamCallbacks } from '../services/SearchAugmentedChat';
 import {
   SearchIndicator,
   SearchBadge,
@@ -43,7 +43,7 @@ import {
   type SearchResult,
   type Citation,
 } from './SearchUI';
-import { detectSearchIntent } from './useWebSearch';
+import { detectSearchIntent } from '../hooks/useWebSearch';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UTILITY
@@ -473,7 +473,8 @@ export const SearchEnabledChat: FC<SearchEnabledChatProps> = ({
     if (lastUserMessage) {
       // Remove last assistant message if it exists
       setMessages((prev) => {
-        const lastAssistantIdx = prev.findLastIndex((m) => m.role === 'assistant');
+        const reversedIndex = [...prev].reverse().findIndex((m) => m.role === 'assistant');
+        const lastAssistantIdx = reversedIndex >= 0 ? prev.length - 1 - reversedIndex : -1;
         if (lastAssistantIdx > -1) {
           return prev.slice(0, lastAssistantIdx);
         }

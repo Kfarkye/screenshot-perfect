@@ -14,7 +14,7 @@
  * }
  */
 
-import { detectSearchIntent, buildSearchQuery, formatResultsForAI, type SearchResult, type SearchCategory } from './useWebSearch';
+import { detectSearchIntent, buildSearchQuery, formatResultsForAI, type SearchResult, type SearchCategory } from '../hooks/useWebSearch';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -31,6 +31,7 @@ export interface ChatMessage {
     citations?: Citation[];
     model?: string;
     tokensUsed?: number;
+    searchResults?: SearchResult[];
   };
 }
 
