@@ -1,637 +1,808 @@
+import React, { useState, useRef, useEffect, useCallback, lazy, Suspense, Component, ErrorInfo } from "react";
 
-import React, { useState, useRef, useEffect, useCallback, lazy, Suspense, useMemo, ErrorInfo, Component } from 'react';
+// Components
+import { Header } from "./components/Header";
+import { ChatMessage } from "./components/ChatMessage";
+import { InputArea, InputAreaHandle } from "./components/InputArea";
+import { useAuth } from "./hooks/useAuth";
+// Optimized Static Import for reliability
+import { supabase } from "@/integrations/supabase/client";
 
-// Components (Assuming these are optimized, e.g., using React.memo)
-import { Header } from './components/Header';
-import { ChatMessage } from './components/ChatMessage';
-import { InputArea, InputAreaHandle } from './components/InputArea';
-import { useAuth } from './hooks/useAuth';
-
-// Types (Using 'import type' ensures types are erased at compile time for optimal builds)
-import type { Message, SuggestionType, GameData, AppTheme, League } from './types';
+// Types
+// Ensure 'types.ts' defines MessageStatus: 'pending' | 'streaming' | 'complete' | 'error'
+import type { Message, GameData, AppTheme, League } from "./types";
 
 // Services
-import { sendMessageToAI } from './services/nhlAi';
+// Using the service path provided in the context
+import { sendMessageToAI } from "./services/nhlAi";
 
-// Icons (Lucide for lightweight, consistent iconography)
-import { Calendar, ChevronRight, MessageSquare, Zap, TrendingUp, BarChart3, AlertTriangle, WifiOff } from 'lucide-react';
+// Icons
+import {
+  Calendar,
+  ChevronRight,
+  MessageSquare,
+  Zap,
+  TrendingUp,
+  BarChart3,
+  AlertTriangle,
+  WifiOff,
+  Cpu,
+  Loader2,
+} from "lucide-react";
 
-// --- Configuration & Constants (Vercel/Linear Rigor) ---
+// --- Configuration & Constants ---
 
-const MAX_API_RETRIES = 3;
-const RETRY_DELAY_BASE_MS = 500; // Base delay for exponential backoff
-const SCROLL_THRESHOLD = 350; // Pixels from bottom to trigger auto-scroll
+// Increased threshold for better scroll detection during streaming
+const SCROLL_THRESHOLD = 450;
 
-// High-quality suggestions reflecting Stripe-grade onboarding and DraftKings-style insights
-const NHL_SUGGESTIONS = [
-  { id: 's1', label: "Today's Slate", icon: Calendar, query: "Show me today's full NHL slate with opening lines and sharp money indicators.", desc: "Full board overview and market movement" },
-  { id: 's2', label: "Optimize a No-Loss Bet", icon: Zap, query: "I have a $500 risk-free bet. How should I optimize its EV (+5% edge) on today's slate?", desc: "Maximize expected value from promotions" },
-  { id: 's3', label: "Top Mismatch", icon: TrendingUp, query: "Analyze the game with the highest liquidity tonight. Where is the smart money going?", desc: "Deep dive analysis and steam tracking" },
+// Institutional-grade suggestions (Static Data)
+const LEAGUE_CONFIG = {
+  NHL: {
+    suggestions: [
+      {
+        id: "s1",
+        label: "Today's Slate & Signals",
+        icon: Calendar,
+        query: "Show me today's full NHL slate with consensus lines and sharp money indicators.",
+        desc: "Market overview & steam detection",
+      },
+      {
+        id: "s2",
+        label: "EV Optimizer",
+        icon: Zap,
+        query: "I have a risk-free bet. Optimize EV (+5% edge) on today's NHL slate.",
+        desc: "Maximize promotional value (Arb/Hedge)",
+      },
+      {
+        id: "s3",
+        label: "Liquidity Analysis",
+        icon: TrendingUp,
+        query: "Analyze the NHL game with the highest liquidity. Where is the smart money positioned?",
+        desc: "Volume analysis & sharp action",
+      },
+    ],
+  },
+  NFL: {
+    suggestions: [
+      {
+        id: "n1",
+        label: "Weekly Market Report",
+        icon: Calendar,
+        query: "Break down the upcoming NFL slate. Identify key line moves and contrarian spots.",
+        desc: "Macro market view & CLV analysis",
+      },
+      {
+        id: "n2",
+        label: "Underdog Value (DVOA)",
+        icon: Zap,
+        query: "Which NFL underdogs have the best moneyline EV based on DVOA mismatch this week?",
+        desc: "High leverage spots & statistical edges",
+      },
+      {
+        id: "n3",
+        label: "Prime Time Deep Dive",
+        icon: TrendingUp,
+        query: "Analyze the next Prime Time NFL game. Focus on EPA/Play, injuries, and coaching trends.",
+        desc: "TNF/SNF/MNF comprehensive analysis",
+      },
+    ],
+  },
+  NBA: {
+    suggestions: [
+      {
+        id: "b1",
+        label: "Tonight's Board & Injuries",
+        icon: Calendar,
+        query: "Show me tonight's NBA slate with real-time injury reports and corresponding line moves.",
+        desc: "Pace, injury impact & market reaction",
+      },
+      {
+        id: "b2",
+        label: "Totals Edge (Pace/Rating)",
+        icon: TrendingUp,
+        query: "Which NBA games have the best over/under value based on pace metrics and efficiency ratings?",
+        desc: "Algorithmic totals analysis",
+      },
+      {
+        id: "b3",
+        label: "Usage Rate Volatility",
+        icon: Zap,
+        query:
+          "Analyze NBA games where star players are questionable. How does their status impact usage rates and props?",
+        desc: "Prop discovery & volatility analysis",
+      },
+    ],
+  },
+};
+
+type TabId = "chat" | "schedule";
+
+const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "chat", label: "Analysis", icon: MessageSquare },
+  { id: "schedule", label: "Board", icon: BarChart3 },
 ];
 
-const NFL_SUGGESTIONS = [
-  { id: 'n1', label: "Week's Slate", icon: Calendar, query: "Break down the upcoming NFL slate. Who are the sharp contrarian plays?", desc: "Full week overview" },
-  { id: 'n2', label: "Underdog Strategy", icon: Zap, query: "Which NFL underdogs have the best value on the moneyline this week?", desc: "High EV underdog hunting" },
-  { id: 'n3', label: "Prime Time", icon: TrendingUp, query: "Analyze the next Prime Time game. What are the key injuries and matchup edges?", desc: "TNF/SNF/MNF Analysis" },
-];
-
-const NBA_SUGGESTIONS = [
-  { id: 'b1', label: "Tonight's Board", icon: Calendar, query: "Show me tonight's NBA slate with injury reports and line moves.", desc: "Full board with key updates" },
-  { id: 'b2', label: "Pace & Totals", icon: TrendingUp, query: "Which games have the best over/under value based on pace and defense?", desc: "Totals analysis and betting angles" },
-  { id: 'b3', label: "Star Power", icon: Zap, query: "Analyze games where star players are questionable or recently returned.", desc: "Player prop opportunities" },
-];
-
-type TabId = 'chat' | 'schedule';
-
-interface TabConfig {
-  id: TabId;
-  label: string;
-  icon: React.ElementType;
-}
-
-const TABS: TabConfig[] = [
-  { id: 'chat', label: 'Analysis', icon: MessageSquare },
-  { id: 'schedule', label: 'Board', icon: BarChart3 },
-];
-
-// --- Utilities & Observability ---
+// --- Utilities ---
 
 const observability = {
   logError: (error: unknown, context: string, metadata: Record<string, any> = {}) => {
-    console.error(JSON.stringify({ level: 'error', timestamp: new Date().toISOString(), context, error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, metadata }));
+    console.error(
+      JSON.stringify({
+        level: "error",
+        timestamp: new Date().toISOString(),
+        context,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata,
+      }),
+    );
   },
   logInfo: (message: string, context: string, metadata: Record<string, any> = {}) => {
-    if (process.env.NODE_ENV !== 'production') {
-        console.info(JSON.stringify({ level: 'info', timestamp: new Date().toISOString(), context, message, metadata }));
-    }
+    if (process.env.NODE_ENV !== "production")
+      console.info(JSON.stringify({ level: "info", context, message, metadata }));
   },
-  trackEvent: (event: string, properties: Record<string, unknown> = {}) => {
-  },
-  trackMetric: (name: string, value: number, tags: Record<string, string> = {}) => {
+};
+
+const cn = (...classes: (string | boolean | undefined | null)[]): string => classes.filter(Boolean).join(" ");
+
+// --- Polyfills & Browser APIs ---
+
+const safeRequestIdleCallback = (cb: () => void) => {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    (window as any).requestIdleCallback(cb);
+  } else {
+    setTimeout(cb, 1);
   }
 };
 
-const cn = (...classes: (string | boolean | undefined | null)[]): string => {
-  return classes.filter(Boolean).join(' ');
-};
-
-// --- Lazy Loaded Components & Fallbacks (Performance) ---
+// --- Lazy Components ---
 
 const ScheduleView = lazy(() =>
-  import('./components/ScheduleView')
-    .then(module => ({ default: module.ScheduleView }))
-    .catch(error => {
-      observability.logError(error, 'LazyLoadScheduleView', { chunkLoadError: true });
-      return { default: () => (
-        <div className="flex flex-col items-center justify-center h-full text-center p-8" role="alert">
-            <AlertTriangle className="text-red-500 w-12 h-12 mb-4" />
-            <h3 className="text-xl font-semibold text-foreground">Failed to load the board.</h3>
-            <p className="text-muted-foreground mt-2">We couldn't load the live data. Please check your connection and refresh.</p>
+  import("./components/ScheduleView")
+    .then((module) => ({ default: module.ScheduleView }))
+    .catch((error) => {
+      observability.logError(error, "LazyLoadScheduleView");
+      return {
+        default: () => (
+          <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-background">
+            <AlertTriangle className="text-destructive w-16 h-16 mb-6" strokeWidth={1.5} />
+            <h3 className="text-2xl font-semibold tracking-tight text-foreground">Data Feed Interrupted</h3>
+            <p className="text-muted-foreground mt-2">
+              Unable to load the market board. Please verify your connection.
+            </p>
             <button
-                onClick={() => window.location.reload()}
-                className="mt-4 px-4 py-2 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => window.location.reload()}
+              className="mt-6 px-5 py-2 bg-primary text-primary-foreground rounded-lg shadow-md hover:bg-primary/90 transition-colors"
             >
-                Reload
+              Retry Connection
             </button>
-        </div>
-      )};
-    })
-);
-
-const ScheduleLoadingSkeleton = () => (
-    <div className="p-6 animate-pulse" role="status" aria-label="Loading live market data">
-        <div className="h-8 bg-surfaceHighlight/50 rounded-lg w-1/3 mb-6"></div>
-        <div className="space-y-4">
-            {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-24 bg-surfaceHighlight/50 rounded-xl"></div>
-            ))}
-        </div>
-    </div>
+          </div>
+        ),
+      };
+    }),
 );
 
 // --- Hooks ---
 
-const useTheme = (defaultTheme: AppTheme = 'dark') => {
+const useTheme = (defaultTheme: AppTheme = "dark") => {
   const [theme, setTheme] = useState<AppTheme>(defaultTheme);
 
   useEffect(() => {
-    try {
-      const storedTheme = localStorage.getItem('appTheme');
-      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const stored = localStorage.getItem("appTheme") as AppTheme;
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initial = stored || (prefersDark ? "dark" : "light");
 
-      let initialTheme: AppTheme = defaultTheme;
-
-      if (storedTheme === 'light' || storedTheme === 'dark') {
-        initialTheme = storedTheme;
-      } else if (prefersDark) {
-        initialTheme = 'dark';
-      }
-
-      setTheme(initialTheme);
-      document.documentElement.className = initialTheme;
-      document.documentElement.style.setProperty('color-scheme', initialTheme);
-    } catch (error) {
-      observability.logError(error, 'useThemeInit');
-      document.documentElement.className = defaultTheme;
-      document.documentElement.style.setProperty('color-scheme', defaultTheme);
-    }
-  }, [defaultTheme]);
+    setTheme(initial);
+    document.documentElement.className = initial;
+  }, []);
 
   const toggleTheme = useCallback(() => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
+    const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
-    document.documentElement.className = newTheme;
-    document.documentElement.style.setProperty('color-scheme', newTheme);
-    try {
-      localStorage.setItem('appTheme', newTheme);
-    } catch (error) {
-      observability.logError(error, 'useThemeToggle');
-    }
-    observability.trackEvent('theme_toggled', { theme: newTheme });
+
+    document.documentElement.classList.remove(theme);
+    document.documentElement.classList.add(newTheme);
+    localStorage.setItem("appTheme", newTheme);
   }, [theme]);
 
   return { theme, toggleTheme };
 };
 
-const useNetworkStatus = () => {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+// ENHANCEMENT: Persist Active Tab across sessions
+const usePersistedTab = (defaultTab: TabId = "chat") => {
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    if (typeof window === "undefined") return defaultTab;
+    const stored = localStorage.getItem("appActiveTab") as TabId;
+    return stored || defaultTab;
+  });
 
-  useEffect(() => {
-    const handleOnline = () => { setIsOnline(true); observability.logInfo('Network status changed', 'useNetworkStatus', { status: 'online' }); };
-    const handleOffline = () => { setIsOnline(false); observability.logInfo('Network status changed', 'useNetworkStatus', { status: 'offline' }); };
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
+  const setTab = useCallback((tab: TabId) => {
+    setActiveTab(tab);
+    localStorage.setItem("appActiveTab", tab);
   }, []);
 
+  return { activeTab, setTab };
+};
+
+const useNetworkStatus = () => {
+  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+
+  useEffect(() => {
+    const setStatus = () => setIsOnline(navigator.onLine);
+    window.addEventListener("online", setStatus);
+    window.addEventListener("offline", setStatus);
+    return () => {
+      window.removeEventListener("online", setStatus);
+      window.removeEventListener("offline", setStatus);
+    };
+  }, []);
   return isOnline;
 };
 
-const useReducedMotion = () => {
-    const [reducedMotion, setReducedMotion] = useState(false);
-    useEffect(() => {
-        const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-        if (!mediaQuery) return;
-        setReducedMotion(mediaQuery.matches);
-        const listener = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-        mediaQuery.addEventListener('change', listener);
-        return () => mediaQuery.removeEventListener('change', listener);
-    }, []);
-    return reducedMotion;
-};
+// --- Sub-Components ---
 
-// --- Presentation Components ---
+// Enhanced OnboardingView for a cleaner, "Internal Tool" aesthetic
+const OnboardingView = React.memo(
+  ({ onSuggestionClick, league }: { onSuggestionClick: (q: string) => void; league: League }) => {
+    const suggestions = LEAGUE_CONFIG[league]?.suggestions || LEAGUE_CONFIG.NHL.suggestions;
 
-const LoadingIndicator = React.memo(() => (
-  <div className="flex justify-start w-full px-2 motion-safe:animate-fadeIn" role="status" aria-live="polite" aria-label="Analyzing Market Data">
-    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-muted/70 border border-border/50 backdrop-blur-sm shadow-sm">
-      <div className="relative w-2 h-2 motion-reduce:hidden">
-         <div className="absolute inset-0 w-full h-full rounded-full bg-accent opacity-30 animate-ping-slow"></div>
-         <div className="absolute inset-0 w-full h-full rounded-full bg-accent"></div>
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-4 md:p-8 text-center animate-slide-up-fade">
+        <div className="max-w-2xl w-full space-y-16">
+          {/* Header Section */}
+          <div className="space-y-5">
+            <div className="inline-flex items-center justify-center p-4 rounded-3xl bg-gradient-to-br from-gray-100/80 to-gray-200/80 dark:from-white/5 dark:to-white/10 mb-4 shadow-inner backdrop-blur-sm">
+              {/* Changed icon to emphasize computational power */}
+              <Cpu className="w-10 h-10 text-gray-900 dark:text-white" strokeWidth={1.5} />
+            </div>
+            <h1 className="text-5xl md:text-6xl font-extrabold tracking-tighter text-foreground">
+              Sharp<span className="text-accent">Edge</span> v2.1
+            </h1>
+            <p className="text-muted-foreground text-xl font-light leading-relaxed max-w-lg mx-auto">
+              Institutional-grade {league} market analysis.
+            </p>
+            <p className="text-xs font-mono uppercase tracking-wider opacity-60">
+              Powered by Morning Cron Pre-computation & Gemini Deep Think
+            </p>
+          </div>
+
+          {/* Suggestions Grid */}
+          <div className="grid md:grid-cols-2 gap-4 w-full max-w-3xl mx-auto">
+            {suggestions.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => onSuggestionClick(s.query)}
+                className="group flex flex-col items-start p-5 rounded-2xl text-left transition-all duration-300
+                         bg-white/70 dark:bg-gray-800/50 border border-gray-200/70 dark:border-white/10 backdrop-blur-lg
+                         hover:shadow-xl hover:border-accent/50 dark:hover:border-accent/50 transform hover:-translate-y-0.5"
+              >
+                <div className="flex items-center gap-4 mb-3">
+                  <div
+                    className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-white/10 flex items-center justify-center text-foreground
+                              group-hover:bg-accent group-hover:text-white transition-colors duration-300"
+                  >
+                    <s.icon size={20} strokeWidth={2} />
+                  </div>
+                  <span className="text-base font-bold text-foreground">{s.label}</span>
+                </div>
+                <span className="text-sm text-muted-foreground leading-snug group-hover:text-foreground/90 transition-colors">
+                  {s.desc}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-      <span className="text-xs text-muted-foreground font-mono uppercase tracking-widest font-medium">
-        Analyzing Market Data
-      </span>
+    );
+  },
+);
+OnboardingView.displayName = "OnboardingView";
+
+// Refined BufferingIndicator (Used when waiting for the stream to start)
+const BufferingIndicator = () => (
+  <div className="flex justify-start w-full px-2 py-4 animate-fadeIn">
+    <div className="flex items-center gap-3 px-4 py-3 rounded-full bg-muted/70 border border-border/60 backdrop-blur-md shadow-sm">
+      <div className="w-3 h-3">
+        {/* Using SVG spinner for better control and aesthetic */}
+        <svg
+          className="animate-spin h-full w-full text-accent"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          ></path>
+        </svg>
+      </div>
+      <span className="text-sm font-medium text-muted-foreground">Connecting to Analysis Engine...</span>
     </div>
   </div>
-));
-LoadingIndicator.displayName = 'LoadingIndicator';
+);
 
-interface OnboardingProps {
-  onSuggestionClick: (query: string) => void;
-  league: League;
-}
-
-const OnboardingView = React.memo(({ onSuggestionClick, league }: OnboardingProps) => {
-  const suggestions = league === 'NHL' ? NHL_SUGGESTIONS : league === 'NBA' ? NBA_SUGGESTIONS : NFL_SUGGESTIONS;
-  
-  return (
-    <div className="min-h-full flex flex-col items-center justify-center p-4 sm:p-6 text-center motion-safe:animate-slide-up-fade">
-      <div className="max-w-lg w-full space-y-12">
-        <div className="space-y-4">
-          <h1 className="text-5xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-gray-900 via-gray-600 to-gray-900 dark:from-white dark:via-gray-300 dark:to-white">
-            Sharp<span className="text-accent">Edge</span>
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 text-lg font-light max-w-md mx-auto leading-relaxed">
-            Institutional-grade {league} betting analysis. Powered by low-latency market data and advanced AI modeling.
-          </p>
-        </div>
-        
-        <div className="grid gap-4 w-full" role="list">
-          {suggestions.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => {
-                  observability.trackEvent('suggestion_clicked', { suggestionId: s.id });
-                  onSuggestionClick(s.query);
-              }}
-              className="group flex items-center justify-between p-5 rounded-xl text-left w-full transition-all duration-300 ease-out 
-                        bg-gray-100/50 dark:bg-white/5 border border-gray-200/50 dark:border-white/10 backdrop-blur-md shadow-sm
-                        hover:bg-gray-200/50 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-accent/30 hover:shadow-md motion-safe:hover:scale-[1.01]
-                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              aria-label={`Start analysis: ${s.label}`}
-              role="listitem"
-            >
-              <div className="flex items-center gap-5">
-                <div className="w-12 h-12 rounded-lg bg-gray-200 dark:bg-white/10 flex items-center justify-center text-gray-900 dark:text-white shadow-inner 
-                                group-hover:bg-accent group-hover:text-white dark:group-hover:text-black transition-colors duration-300">
-                  <s.icon size={22} strokeWidth={2} aria-hidden="true" />
-                </div>
-                <div>
-                  <span className="block text-base font-semibold text-gray-900 dark:text-white">{s.label}</span>
-                  <span className="block text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-800 dark:group-hover:text-gray-200 transition-colors mt-1 leading-tight">{s.desc}</span>
-                </div>
-              </div>
-              <ChevronRight size={18} className="text-gray-500 dark:text-gray-400 group-hover:text-accent transition-all duration-300 transform motion-safe:group-hover:translate-x-1 ease-out" aria-hidden="true" />
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-});
-OnboardingView.displayName = 'OnboardingView';
+// Hydration Loading Indicator
+const HydrationLoader = () => (
+  <div className="h-full flex items-center justify-center text-muted-foreground">
+    <Loader2 className="w-6 h-6 animate-spin mr-3" />
+    <span className="text-sm">Loading Analysis History...</span>
+  </div>
+);
 
 // --- Main Application Component ---
 
 const App: React.FC = () => {
-  // Auth
+  // State
   const { user, signOut } = useAuth();
-  
-  // State Management
-  const { theme, toggleTheme } = useTheme('dark');
-  const [activeTab, setActiveTab] = useState<TabId>('chat');
-  const [activeLeague, setActiveLeague] = useState<League>('NHL');
+  const { theme, toggleTheme } = useTheme();
+  const { activeTab, setTab: setActiveTab } = usePersistedTab("chat");
+  const [activeLeague, setActiveLeague] = useState<League>("NHL");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  
-  const isOnline = useNetworkStatus();
-  const reducedMotion = useReducedMotion();
+  const [isStreaming, setIsStreaming] = useState(false); // Tracks active streaming
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isHydrating, setIsHydrating] = useState(true); // Tracks initial data load
 
+  // Refs & Env
+  const isOnline = useNetworkStatus();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({ chat: null, schedule: null });
   const inputAreaRef = useRef<InputAreaHandle>(null);
-  const activeRequestRef = useRef<string | null>(null);
 
-  const hasStarted = useMemo(() => messages.length > 0, [messages]);
+  // --- Side Effects ---
 
+  // 1. Prefetch Schedule View (Performance)
   useEffect(() => {
-    observability.logInfo('Application mounted.', 'App');
-    if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(() => {
-            import('./components/ScheduleView').catch(err => observability.logError(err, 'PrefetchScheduleView'));
-        });
-    }
+    safeRequestIdleCallback(() => {
+      import("./components/ScheduleView").catch((err) => observability.logError(err, "PrefetchSchedule"));
+    });
   }, []);
 
-  // When league changes, reset messages to avoid context confusion (Optional, but cleaner)
-  const handleLeagueChange = (league: League) => {
-    setActiveLeague(league);
-    setMessages([]); // Clear chat for new sport context
-    setActiveTab('schedule'); // Switch to board to show new games
-  };
+  // 2. Load Conversation History (Hydration/Persistence)
+  useEffect(() => {
+    // Use an isActive flag to prevent race conditions when switching leagues rapidly
+    let isActive = true;
 
+    const loadHistory = async () => {
+      if (!user) {
+        setIsHydrating(false);
+        return;
+      }
+
+      setIsHydrating(true);
+      // Clear previous state immediately for responsiveness
+      setMessages([]);
+      setConversationId(null);
+
+      try {
+        // Find most recent active conversation for this league
+        const { data: convs, error: convError } = await supabase
+          .from("ai_conversations")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("title", `${activeLeague} Analysis`)
+          .order("updated_at", { ascending: false })
+          .limit(1);
+
+        if (convError) throw convError;
+        if (!isActive) return; // Check if context is still valid
+
+        if (convs && convs.length > 0) {
+          const cId = convs[0].id;
+          setConversationId(cId);
+
+          // Load messages
+          const { data: msgs, error: msgError } = await supabase
+            .from("ai_messages")
+            .select("id, role, content, created_at")
+            .eq("conversation_id", cId)
+            .order("created_at", { ascending: true });
+
+          if (msgError) throw msgError;
+          if (!isActive) return; // Final check before state update
+
+          if (msgs) {
+            const formattedMsgs: Message[] = msgs.map((m) => ({
+              id: m.id,
+              // Map backend roles ('user', 'assistant') to frontend roles ('user', 'model')
+              role: (m.role === "user" ? "user" : "model") as "user" | "model",
+              content: m.content,
+              timestamp: new Date(m.created_at).getTime(),
+              status: "complete",
+            }));
+            setMessages(formattedMsgs);
+          }
+        }
+      } catch (err) {
+        observability.logError(err, "HistoryHydration");
+      } finally {
+        if (isActive) {
+          setIsHydrating(false);
+        }
+      }
+    };
+
+    loadHistory();
+
+    return () => {
+      isActive = false;
+    };
+  }, [user, activeLeague]);
+
+  // 3. Advanced Scroll Handling (UX + Streaming)
   useEffect(() => {
     const container = chatContainerRef.current;
-    if (!container || activeTab !== 'chat') return;
+    // Do not scroll during initial hydration or if refs aren't ready
+    if (activeTab !== "chat" || !messagesEndRef.current || !container || isHydrating) return;
+
+    // Check if the user is near the bottom before scrolling
     const isNearBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + SCROLL_THRESHOLD;
 
-    if (isNearBottom || messages.length <= 2) {
-        const behavior: ScrollBehavior = reducedMotion ? 'auto' : 'smooth';
-        requestAnimationFrame(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
-        });
-    }
-  }, [messages, isLoading, reducedMotion, activeTab]);
+    // Identify if the user initiated the last action (helps on initial load scroll)
+    const relevantMessages = messages.filter((m) => m.content.length > 0 || m.role === "user");
+    const lastMessageIsUser =
+      relevantMessages.length > 0 && relevantMessages[relevantMessages.length - 1].role === "user";
 
-  const handleTabChange = useCallback((tabId: TabId) => {
-    if (tabId !== activeTab) {
-        setActiveTab(tabId);
-        if (tabId === 'chat' && hasStarted) {
-            inputAreaRef.current?.focusInput();
+    // Scroll if near bottom, OR if the user just sent a message, OR if actively streaming (to keep up with new content)
+    if (isNearBottom || lastMessageIsUser || isStreaming) {
+      // Use requestAnimationFrame for smoother synchronization with React's rendering cycle
+      requestAnimationFrame(() => {
+        // Use 'auto' behavior during streaming for instant updates, 'smooth' otherwise
+        const behavior = isStreaming ? "auto" : "smooth";
+        messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+      });
+    }
+  }, [messages, activeTab, isHydrating, isStreaming]);
+
+  // --- Handlers ---
+
+  const handleLeagueChange = (league: League) => {
+    if (league === activeLeague) return;
+    // Prevent league change during active analysis
+    if (isLoading) return;
+
+    // Reset state for the new league context (useEffect handles the actual data fetching)
+    setActiveLeague(league);
+    setIsHydrating(true); // Trigger hydration state
+  };
+
+  // ENHANCEMENT: HandleSend with Real-Time Streaming and Stale Closure Prevention
+  const handleSend = useCallback(
+    async (content: string) => {
+      // Check user authentication status explicitly
+      if (!content.trim() || isLoading || !isOnline || isHydrating || !user) return;
+
+      setActiveTab("chat");
+      setIsLoading(true); // Lock input
+
+      // 1. Define Messages for Optimistic Update
+      const userMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: content,
+        timestamp: Date.now(),
+        status: "complete",
+      };
+
+      const streamingAiMsgId = crypto.randomUUID();
+      const streamingAiMsg: Message = {
+        id: streamingAiMsgId,
+        role: "model",
+        content: "", // Start empty
+        timestamp: Date.now(),
+        status: "streaming",
+      };
+
+      // CRITICAL: Use functional updates to capture the correct history snapshot and update the state simultaneously
+      let historySnapshot: Message[] = [];
+      setMessages((prev) => {
+        historySnapshot = [...prev]; // Capture history *before* the interaction
+        return [...prev, userMsg, streamingAiMsg]; // Add user message and AI placeholder
+      });
+
+      let fullResponseText = "";
+      let streamInitialized = false;
+      let currentConvId = conversationId; // Capture current conversationId
+
+      try {
+        // 3. Ensure/Create Conversation (Persistence)
+        if (!currentConvId) {
+          const { data: newConv, error: convError } = await supabase
+            .from("ai_conversations")
+            .insert({
+              user_id: user.id,
+              title: `${activeLeague} Analysis`,
+              session_id: `sess_${crypto.randomUUID()}`,
+            })
+            .select("id")
+            .single();
+
+          if (convError || !newConv) {
+            observability.logError(convError, "CreateConversation");
+            throw new Error("Failed to establish conversation session.");
+          }
+
+          currentConvId = newConv.id;
+          setConversationId(currentConvId); // Update state for next time
         }
-    }
-  }, [activeTab, hasStarted]);
 
-  const handleTabKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-      event.preventDefault();
-      const currentIndex = TABS.findIndex(tab => tab.id === activeTab);
-      let nextIndex;
-      if (event.key === 'ArrowRight') {
-        nextIndex = (currentIndex + 1) % TABS.length;
-      } else {
-        nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
-      }
-      const nextTabId = TABS[nextIndex].id;
-      setActiveTab(nextTabId);
-      tabRefs.current[nextTabId]?.focus();
-    }
-  }, [activeTab]);
+        // 4. Persist User Message (Async background task)
+        if (currentConvId) {
+          supabase
+            .from("ai_messages")
+            .insert({
+              conversation_id: currentConvId,
+              role: "user",
+              content: content,
+            })
+            .then(({ error }) => {
+              if (error) observability.logError(error, "PersistUserMessage");
+            });
+        }
 
-  const handleSend = useCallback(async (content: string, retryCount = 0) => {
-    const trimmedContent = content.trim();
-    if (!trimmedContent) return;
-    if (!isOnline) return;
-    if (isLoading && retryCount === 0) return;
+        // --- STREAMING EXECUTION ---
 
-    const requestId = retryCount === 0 ? crypto.randomUUID() : activeRequestRef.current!;
-    activeRequestRef.current = requestId;
-
-    if (activeTab !== 'chat') setActiveTab('chat');
-
-    let userMsg: Message | null = null;
-    if (retryCount === 0) {
-        userMsg = {
-          id: crypto.randomUUID(),
-          role: 'user',
-          content: trimmedContent,
-          timestamp: Date.now(),
-          status: 'complete',
+        // Callback to handle incoming chunks
+        const handleChunk = (chunk: string) => {
+          if (!streamInitialized) {
+            setIsStreaming(true); // Activate streaming state once data flows
+            streamInitialized = true;
+          }
+          fullResponseText += chunk;
+          // Efficiently update only the content of the specific streaming message
+          setMessages((prev) =>
+            prev.map((msg) => (msg.id === streamingAiMsgId ? { ...msg, content: fullResponseText } : msg)),
+          );
         };
-        setMessages((prev) => [...prev, userMsg!]);
-        setIsLoading(true);
-    }
 
-    const startTime = performance.now();
+        // Execute the AI call
+        await sendMessageToAI(content, historySnapshot, activeLeague, handleChunk);
 
-    try {
-      const { supabase } = await import('@/integrations/supabase/client');
+        // --- STREAM COMPLETION ---
+        setIsStreaming(false);
 
-      // Get or create conversation
-      const sessionId = `session_${Date.now()}`;
-      let conversationId = localStorage.getItem('conversationId');
-      
-      if (!conversationId && user) {
-        const { data: convData, error: convError } = await supabase
-          .from('ai_conversations')
-          .insert({
-            session_id: sessionId,
-            user_id: user.id,
-            title: `${activeLeague} Analysis`
-          })
-          .select('id')
-          .single();
+        // Update final status to complete
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === streamingAiMsgId ? { ...msg, status: "complete", timestamp: Date.now() } : msg,
+          ),
+        );
 
-        if (!convError && convData) {
-          conversationId = convData.id;
-          localStorage.setItem('conversationId', conversationId);
+        // Persist Final AI Message
+        if (currentConvId && fullResponseText) {
+          supabase
+            .from("ai_messages")
+            .insert({
+              conversation_id: currentConvId,
+              role: "assistant", // Use 'assistant' for backend compatibility
+              content: fullResponseText,
+              model: "gemini-1.5-pro-optimized",
+            })
+            .then(({ error }) => {
+              if (error) observability.logError(error, "PersistAIMessage");
+            });
         }
-      }
+      } catch (error) {
+        observability.logError(error, "MessagePipelineStreamError");
+        setIsStreaming(false);
 
-      // Store user message in DB
-      if (userMsg && conversationId) {
-        await supabase.from('ai_messages').insert({
-          conversation_id: conversationId,
-          role: 'user',
-          content: trimmedContent
+        // Handle errors: Update the placeholder message to show an error state
+        setMessages((prev) => {
+          return prev.map((msg) => {
+            if (msg.id === streamingAiMsgId) {
+              return {
+                ...msg,
+                // Show error message, preserving partial content if stream failed midway
+                content:
+                  msg.content +
+                  `\n\n[System Error: ${error instanceof Error ? error.message : "The stream was interrupted."} Please try again.]`,
+                status: "error",
+                isError: true,
+                timestamp: Date.now(),
+              };
+            }
+            return msg;
+          });
         });
+      } finally {
+        setIsLoading(false); // Unlock input
+        // Ensure focus returns to input after processing (UX)
+        requestAnimationFrame(() => inputAreaRef.current?.focusInput());
       }
+      // Dependencies optimized: Removed 'messages' as we use functional updates and snapshots
+    },
+    [isLoading, isOnline, conversationId, user, activeLeague, isHydrating, setActiveTab],
+  );
 
-      // Fetch today's schedule first to populate context
-      const { fetchSchedule } = await import('./services/nhlAi');
-      await fetchSchedule(activeLeague, new Date());
-      
-      // Get AI response (now with real data in context)
-      const responseText = await sendMessageToAI(trimmedContent, messages, activeLeague);
-      
-      if (activeRequestRef.current !== requestId) return;
+  const handleAnalyzeGame = useCallback(
+    (game: GameData) => {
+      // Construct a precise prompt for game analysis
+      const prompt = `Provide a sharp analysis for ${game.awayTeam} @ ${game.homeTeam}. Focus on advanced metrics (DVOA/EPA/xG), market movement, and identify the best spread/total/prop positions.`;
+      handleSend(prompt);
+    },
+    [handleSend],
+  );
 
-      const latency = performance.now() - startTime;
-      const aiMsg: Message = {
-        id: crypto.randomUUID(),
-        role: 'model',
-        content: responseText,
-        timestamp: Date.now(),
-        status: 'complete',
-        metadata: { latency }
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+  // --- Render ---
 
-      // Store AI message in DB
-      if (conversationId) {
-        await supabase.from('ai_messages').insert({
-          conversation_id: conversationId,
-          role: 'assistant',
-          content: responseText,
-          provider: 'gemini',
-          model: 'gemini-3-pro-preview'
-        });
-      }
+  // Global layout definitions
+  const MAX_WIDTH_CLASS = "max-w-6xl";
 
-    } catch (error) {
-      if (activeRequestRef.current !== requestId) return;
-      const latency = performance.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const isTransientError = (errorMessage.includes('network') || errorMessage.includes('timeout') || errorMessage.includes('503'));
-
-      if (retryCount < MAX_API_RETRIES && isTransientError) {
-        const delay = RETRY_DELAY_BASE_MS * Math.pow(2, retryCount);
-        setTimeout(() => handleSend(trimmedContent, retryCount + 1), delay);
-        return; 
-      }
-
-      const errorMsg: Message = {
-        id: crypto.randomUUID(),
-        role: 'model',
-        content: "I'm experiencing high volatility in the market feeds right now. Analysis is temporarily unavailable.",
-        timestamp: Date.now(),
-        status: 'error',
-        isError: true,
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      if (activeRequestRef.current === requestId) {
-        setIsLoading(false);
-        activeRequestRef.current = null;
-        inputAreaRef.current?.focusInput();
-      }
-    }
-  }, [isLoading, isOnline, activeTab, activeLeague]);
-
-  const handleAnalyzeGame = useCallback((game: GameData) => {
-    const prompt = `Analyze the ${game.awayTeam} @ ${game.homeTeam} game. Provide institutional-grade analysis focusing on market inefficiencies, sharp money movement, and high EV betting angles.`;
-    handleSend(prompt);
-  }, [handleSend]);
+  // Determine if the buffering indicator should be shown (Loading, but stream hasn't started yet)
+  const showBufferingIndicator = isLoading && !isStreaming;
 
   return (
     <AppErrorBoundary>
-        <div 
-            className="flex flex-col h-screen supports-[height:100dvh]:h-[100dvh] font-sans antialiased overflow-hidden selection:bg-accent/50 selection:text-white transition-colors duration-500 bg-background text-foreground"
-            aria-label="SharpEdge Sports Betting Analysis Platform"
-        >
+      <div className="flex flex-col h-[100dvh] bg-background text-foreground font-sans antialiased selection:bg-accent/40 overflow-hidden relative">
+        {/* Connection Status Bar (Resilience) */}
         {!isOnline && (
-            <div className="bg-yellow-600 text-white text-center py-1 text-xs z-50 shadow-md flex items-center justify-center gap-2" role="alert" aria-live="assertive">
-                <WifiOff size={14} />
-                <span>Connection lost.</span>
-            </div>
+          <div className="bg-amber-700/95 backdrop-blur-sm text-white text-center py-1.5 text-sm font-medium z-50 flex items-center justify-center gap-3 absolute top-0 w-full shadow-md">
+            <WifiOff size={16} />
+            <span>Offline Mode: Analysis unavailable. Using cached market data.</span>
+          </div>
         )}
 
-        <Header 
-          theme={theme} 
-          toggleTheme={toggleTheme} 
-          activeLeague={activeLeague} 
-          onLeagueChange={handleLeagueChange} 
+        <Header
+          theme={theme}
+          toggleTheme={toggleTheme}
+          activeLeague={activeLeague}
+          onLeagueChange={handleLeagueChange}
           onSignOut={signOut}
         />
 
-        <nav className="flex-shrink-0 px-4 pt-6 pb-2 z-40 sm:px-6" aria-label="Main Navigation">
-            <div 
-                role="tablist" 
-                aria-label="Application Views"
-                onKeyDown={handleTabKeyDown}
-                className="flex p-1.5 bg-gray-100/80 dark:bg-black/60 border border-gray-200/50 dark:border-white/10 backdrop-blur-xl rounded-xl max-w-sm mx-auto shadow-2xl relative"
-            >
-                {TABS.map((tab) => (
+        {/* View Switcher (Tabs) - Refined visual feedback */}
+        <nav className="flex-shrink-0 px-4 pt-5 pb-3 z-40">
+          <div
+            className={`flex p-1 bg-muted/60 backdrop-blur-xl rounded-xl mx-auto shadow-sm border border-border/50 relative ${MAX_WIDTH_CLASS}`}
+          >
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
                 <button
-                    key={tab.id}
-                    ref={(el) => { tabRefs.current[tab.id] = el; }}
-                    id={`tab-${tab.id}`}
-                    role="tab"
-                    aria-selected={activeTab === tab.id}
-                    aria-controls={`panel-${tab.id}`}
-                    tabIndex={activeTab === tab.id ? 0 : -1}
-                    onClick={() => handleTabChange(tab.id)}
-                    className={cn(
-                    "flex-1 flex items-center justify-center gap-2.5 py-3 rounded-lg text-[15px] font-extrabold transition-all duration-300 ease-cubic-bezier relative z-10",
-                    activeTab === tab.id
-                        ? "text-gray-900 dark:text-white"
-                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white focus-visible:text-gray-900 dark:focus-visible:text-white",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:z-20"
-                    )}
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  // Disable tab switching during loading/hydration
+                  disabled={isLoading || isHydrating}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-2.5 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 relative z-10 focus:outline-none focus-visible:ring-2 focus:ring-accent/50 disabled:opacity-50",
+                    isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-pressed={isActive}
                 >
-                    <tab.icon size={18} strokeWidth={2.5} aria-hidden="true" />
-                    <span className="tracking-wide">{tab.label}</span>
-                    {activeTab === tab.id && (
-                        <div className="absolute inset-0 bg-white dark:bg-white/10 border border-gray-300 dark:border-white/20 shadow-lg backdrop-blur-sm rounded-lg -z-10 motion-safe:animate-scale-in" aria-hidden="true" />
-                    )}
+                  <tab.icon size={18} strokeWidth={isActive ? 2.5 : 2} />
+                  <span>{tab.label}</span>
+                  {/* Active State Indicator */}
+                  {isActive && (
+                    <div className="absolute inset-0 bg-background shadow-md rounded-lg -z-10 animate-scale-in border border-border/70" />
+                  )}
                 </button>
-                ))}
-            </div>
+              );
+            })}
+          </div>
         </nav>
 
-        <main className="flex-1 flex flex-col relative max-w-5xl mx-auto w-full overflow-hidden">
-             <div
-                id="panel-chat"
-                role="tabpanel"
-                aria-labelledby="tab-chat"
-                className={cn("flex-1 flex flex-col overflow-hidden h-full", activeTab !== 'chat' && "hidden")}
-                hidden={activeTab !== 'chat'}
+        {/* Main Content Area */}
+        <main className={`flex-1 flex flex-col relative mx-auto w-full overflow-hidden ${MAX_WIDTH_CLASS}`}>
+          {/* Chat View */}
+          {/* Using absolute positioning and visibility ensures refs remain mounted when switching tabs */}
+          <div
+            className={cn(
+              "flex-1 flex flex-col overflow-hidden h-full transition-opacity duration-300 absolute inset-0",
+              activeTab === "chat" ? "opacity-100 z-10 visible" : "opacity-0 z-0 invisible",
+            )}
+          >
+            {/* Messages Container */}
+            <div
+              ref={chatContainerRef}
+              className="flex-1 overflow-y-auto w-full scroll-smooth px-4 md:px-6 pb-4 scrollbar-hide"
             >
-                <div 
-                    ref={chatContainerRef}
-                    className="flex-1 overflow-y-auto w-full scroll-smooth px-4 md:px-6 pb-4 scrollbar-custom overscroll-contain"
-                    role="log"
-                    aria-live="polite"
-                    aria-atomic="false" 
-                >
-                {!hasStarted ? (
-                    <OnboardingView onSuggestionClick={(query) => handleSend(query)} league={activeLeague} />
-                ) : (
-                    <div className="flex flex-col py-6 space-y-4">
-                        {messages.map((msg) => (
-                            <ChatMessage key={msg.id} message={msg} />
-                        ))}
-                        {isLoading && <LoadingIndicator />}
-                        <div ref={messagesEndRef} className="h-px" aria-hidden="true" />
-                    </div>
-                )}
+              {/* Conditional Rendering based on hydration and message count */}
+              {isHydrating ? (
+                <HydrationLoader />
+              ) : messages.length === 0 ? (
+                <OnboardingView onSuggestionClick={handleSend} league={activeLeague} />
+              ) : (
+                <div className="flex flex-col py-6 space-y-8">
+                  {messages.map((msg) => (
+                    <ChatMessage key={msg.id} message={msg} />
+                  ))}
+                  {/* Show indicator only if buffering before stream starts */}
+                  {showBufferingIndicator && <BufferingIndicator />}
+                  <div ref={messagesEndRef} className="h-px w-full" />
                 </div>
-
-                <div className="flex-shrink-0 z-20 pb-safe relative">
-                    <div className="absolute bottom-full left-0 right-0 h-16 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none"></div>
-                    <div className="px-4 md:px-6">
-                        <InputArea ref={inputAreaRef} onSend={handleSend} isLoading={isLoading} isDisabled={!isOnline} />
-                    </div>
-                </div>
+              )}
             </div>
 
-            {activeTab === 'schedule' && (
-                <div
-                    id="panel-schedule"
-                    role="tabpanel"
-                    aria-labelledby="tab-schedule"
-                    className="flex-1 overflow-y-auto w-full scroll-smooth scrollbar-custom motion-safe:animate-fadeIn h-full"
-                >
-                    <Suspense fallback={<ScheduleLoadingSkeleton />}>
-                        <ScheduleView onAnalyze={handleAnalyzeGame} league={activeLeague} />
-                    </Suspense>
-                </div>
-            )}
-        </main>
-        
-        <style>{`
-            .pb-safe { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
-            .ease-cubic-bezier { transition-timing-function: cubic-bezier(0.645, 0.045, 0.355, 1); }
-            @keyframes slide-up-fade {
-                from { opacity: 0; transform: translateY(20px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-            @keyframes scale-in {
-                from { transform: scale(0.95); opacity: 0.5; }
-                to { transform: scale(1); opacity: 1; }
-            }
-            @keyframes ping-slow {
-            75%, 100% {
-                transform: scale(2);
-                opacity: 0;
-            }
-            }
-            .animate-slide-up-fade { animation: slide-up-fade 0.6s ease-cubic-bezier forwards; }
-            .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
-            .animate-scale-in { animation: scale-in 0.2s ease-cubic-bezier forwards; }
-            .animate-ping-slow { animation: ping-slow 3s cubic-bezier(0, 0, 0.2, 1) infinite; }
+            {/* Input Area - Seamless connection to chat */}
+            <div className="flex-shrink-0 z-20 pb-[env(safe-area-inset-bottom,24px)] px-4 md:px-6 relative">
+              {/* Gradient overlay for smooth transition from chat to input */}
+              <div className="absolute bottom-full left-0 right-0 h-32 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none" />
+              <InputArea
+                ref={inputAreaRef}
+                onSend={handleSend}
+                isLoading={isLoading}
+                isDisabled={!isOnline || isHydrating}
+              />
+            </div>
+          </div>
 
-            @media (prefers-reduced-motion: reduce) {
-                html { scroll-behavior: auto !important; }
-                *, ::before, ::after {
-                    animation-duration: 0.01ms !important;
-                    animation-iteration-count: 1 !important;
-                    transition-duration: 0.01ms !important;
-                    scroll-behavior: auto !important;
-                }
-            }
-            .scrollbar-custom {
-                scrollbar-width: thin;
-                scrollbar-color: rgba(120, 120, 120, 0.2) transparent;
-            }
-            .scrollbar-custom::-webkit-scrollbar { width: 8px; height: 8px; }
-            .scrollbar-custom::-webkit-scrollbar-track { background: transparent; }
-            .scrollbar-custom::-webkit-scrollbar-thumb { background-color: rgba(120, 120, 120, 0.2); border-radius: 4px; }
-            .scrollbar-custom:hover::-webkit-scrollbar-thumb { background-color: rgba(120, 120, 120, 0.4); }
-            .dark .scrollbar-custom { scrollbar-color: rgba(200, 200, 200, 0.15) transparent; }
-            .dark .scrollbar-custom::-webkit-scrollbar-thumb { background-color: rgba(200, 200, 200, 0.15); }
-            .dark .scrollbar-custom:hover::-webkit-scrollbar-thumb { background-color: rgba(200, 200, 200, 0.3); }
-        `}</style>
-        </div>
+          {/* Schedule View */}
+          <div
+            className={cn(
+              "flex-1 overflow-y-auto w-full h-full absolute inset-0",
+              activeTab === "schedule" ? "block z-10" : "hidden z-0",
+            )}
+          >
+            <Suspense
+              fallback={
+                <div className="p-8">
+                  <BufferingIndicator />
+                </div>
+              }
+            >
+              {/* Only render ScheduleView when not hydrating to ensure data consistency */}
+              {!isHydrating && <ScheduleView onAnalyze={handleAnalyzeGame} league={activeLeague} />}
+            </Suspense>
+          </div>
+        </main>
+      </div>
+
+      {/* Global Styles & Animations (Refined) */}
+      <style>{`
+        /* Hide scrollbar for a cleaner look */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Refined Animations using cubic-bezier for natural motion */
+        @keyframes scale-in { 
+            from { transform: scale(0.96); opacity: 0; } 
+            to { transform: scale(1); opacity: 1; } 
+        }
+        .animate-scale-in { animation: scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        
+        @keyframes slideUpFade { 
+            from { transform: translateY(25px); opacity: 0; } 
+            to { transform: translateY(0); opacity: 1; } 
+        }
+        .animate-slide-up-fade { animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+      `}</style>
     </AppErrorBoundary>
   );
 };
 
+// Error Boundary for Production Resilience (Robust implementation)
 class AppErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
-  static getDerivedStateFromError(_: Error) { return { hasError: true }; }
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) { observability.logError(error, 'AppErrorBoundary', { componentStack: errorInfo.componentStack }); }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    observability.logError(error, "AppCrash", { componentStack: errorInfo.componentStack });
+  }
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground p-8 antialiased" role="alert">
-          <AlertTriangle className="w-16 h-16 text-red-500 mb-6" />
-          <h1 className="text-3xl font-bold mb-4">A Critical Error Occurred</h1>
-          <p className="text-muted-foreground mb-6 text-center">We apologize for the inconvenience.</p>
-          <button onClick={() => window.location.reload()} className="px-6 py-2 bg-accent text-white rounded-lg font-semibold hover:bg-accent/90 transition-colors">Refresh Application</button>
+        <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground p-8 text-center">
+          <AlertTriangle className="w-16 h-16 text-destructive mb-6" strokeWidth={1.5} />
+          <h1 className="text-3xl font-bold tracking-tight mb-3">System Failure</h1>
+          <p className="text-muted-foreground mb-6">An unexpected error occurred. The telemetry has been reported.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-5 py-2 bg-primary text-primary-foreground rounded-lg shadow-md hover:bg-primary/90 transition-colors"
+          >
+            Reload Application
+          </button>
         </div>
       );
     }
