@@ -1249,9 +1249,9 @@ Deno.serve(async (req: Request) => {
     if (lastUserMessage.role !== "user") {
       throw new ValidationError("Last message must be from the user role.");
     }
-    const searchTriggers = [/^search[: ]/i, /^find[: ]/i, /what (is|are) the latest/i];
-    if (mode === "search_assist" || searchTriggers.some((t) => t.test(lastUserMessage.content))) {
-      log("INFO", "[ROUTER] Search query detected, delegating.", { ctx });
+    // Search routing: ONLY if mode is explicitly "search_assist", no auto-detection
+    if (mode === "search_assist") {
+      log("INFO", "[ROUTER] Search mode explicitly requested, delegating.", { ctx });
       return await handleSearchQuery({
         query: lastUserMessage.content,
         conversationId,
