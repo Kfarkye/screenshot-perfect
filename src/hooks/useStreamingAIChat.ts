@@ -25,6 +25,8 @@ export const useStreamingAIChat = (game: GameData, pick: PickData) => {
 **Confidence**: ${pick.confidence_score}%
 **Initial Analysis**: ${pick.reasoning_text}
 
+Use external tools (e.g., 'google_search') to find real-time injury updates, advanced metrics, recent performance data, and betting market movements to provide deeper analysis.
+
 Provide concise, insightful analysis. Do not ask the user which game they are referring to. Use markdown formatting where appropriate.`, [game, pick]);
 
   const sendMessage = useCallback(async (inputMessage: string) => {
@@ -62,7 +64,13 @@ Provide concise, insightful analysis. Do not ask the user which game they are re
           'Content-Type': 'application/json',
           'Accept': 'text/event-stream',
         },
-        body: JSON.stringify({ messages: messagesPayload }),
+        body: JSON.stringify({ 
+          messages: messagesPayload,
+          tools: ["google_search"],
+          generationConfig: { temperature: 0.4 },
+          preferredProvider: "gemini",
+          stream: true
+        }),
       });
 
       if (!response.ok) {
