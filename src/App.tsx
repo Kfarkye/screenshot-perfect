@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, lazy, Suspense, Compon
 import { Header } from "./components/Header";
 import { ChatMessage } from "./components/ChatMessage";
 import { InputArea, InputAreaHandle } from "./components/InputArea";
+import { FeaturedContent } from "./components/FeaturedContent";
 import { useAuth } from "./hooks/useAuth";
 // Optimized Static Import for reliability
 import { supabase } from "@/integrations/supabase/client";
@@ -115,9 +116,10 @@ const LEAGUE_CONFIG = {
   },
 };
 
-type TabId = "chat" | "schedule";
+type TabId = "featured" | "chat" | "schedule";
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "featured", label: "Featured", icon: TrendingUp },
   { id: "chat", label: "Analysis", icon: MessageSquare },
   { id: "schedule", label: "Board", icon: BarChart3 },
 ];
@@ -209,11 +211,11 @@ const useTheme = (defaultTheme: AppTheme = "dark") => {
 };
 
 // ENHANCEMENT: Persist Active Tab across sessions
-const usePersistedTab = (defaultTab: TabId = "chat") => {
+const usePersistedTab = (defaultTab: TabId = "featured") => {
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     if (typeof window === "undefined") return defaultTab;
     const stored = localStorage.getItem("appActiveTab") as TabId;
-    return stored || defaultTab;
+    return stored && ["featured", "chat", "schedule"].includes(stored) ? stored : defaultTab;
   });
 
   const setTab = useCallback((tab: TabId) => {
@@ -337,7 +339,7 @@ const App: React.FC = () => {
   // State
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { activeTab, setTab: setActiveTab } = usePersistedTab("chat");
+  const { activeTab, setTab: setActiveTab } = usePersistedTab("featured");
   const [activeLeague, setActiveLeague] = useState<League>("NHL");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -685,6 +687,24 @@ const App: React.FC = () => {
 
         {/* Main Content Area */}
         <main className={`flex-1 flex flex-col relative mx-auto w-full overflow-hidden ${MAX_WIDTH_CLASS}`}>
+          {/* Featured View */}
+          <div
+            className={cn(
+              "flex-1 flex flex-col overflow-hidden h-full transition-opacity duration-300 absolute inset-0",
+              activeTab === "featured" ? "opacity-100 z-10 visible" : "opacity-0 z-0 invisible",
+            )}
+          >
+            <div className="flex-1 overflow-y-auto w-full px-4 md:px-6 py-6">
+              <FeaturedContent 
+                league={activeLeague}
+                onArticleClick={(query) => {
+                  setActiveTab("chat");
+                  handleSend(query);
+                }}
+              />
+            </div>
+          </div>
+
           {/* Chat View */}
           {/* Using absolute positioning and visibility ensures refs remain mounted when switching tabs */}
           <div
