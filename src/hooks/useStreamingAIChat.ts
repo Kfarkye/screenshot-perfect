@@ -28,7 +28,6 @@
 
 import { useReducer, useCallback, useRef, useMemo, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getSportsKnowledge, formatKnowledgeForPrompt } from "@/services/sportsKnowledge";
 
 // ════════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -71,6 +70,7 @@ export interface MessageMetadata {
     outputTokens: number;
     totalCost: number;
   };
+  [key: string]: unknown;
 }
 
 export interface Message {
@@ -449,39 +449,11 @@ ${data.formatted || JSON.stringify(data.odds, null, 2)}
 }
 
 /**
- * Get knowledge base context with timeout protection
+ * Get knowledge base context (DISABLED - no knowledge service available)
  */
 async function getKnowledgeContext(query: string): Promise<string> {
-  const startTime = performance.now();
-
-  const fetchKnowledge = async (): Promise<string> => {
-    try {
-      const result = await getSportsKnowledge(query, {
-        league: "NBA",
-        limit: 5,
-        minConfidence: 0.7,
-      });
-
-      const durationMs = performance.now() - startTime;
-
-      if (!result || result.entries.length === 0) {
-        Telemetry.trackEvent("RAG_KNOWLEDGE_MISS", { durationMs });
-        return "";
-      }
-
-      Telemetry.trackEvent("RAG_KNOWLEDGE_HIT", { durationMs, entries: result.entries.length });
-
-      return formatKnowledgeForPrompt(result.entries, {
-        verbose: true,
-        includeSource: true,
-      });
-    } catch (err) {
-      Telemetry.trackError(err, { stage: "knowledge_fetch" });
-      return "";
-    }
-  };
-
-  return withTimeout(fetchKnowledge(), CONFIG.CONTEXT_TIMEOUT_MS, "Knowledge", "");
+  // Knowledge base integration disabled - return empty context
+  return "";
 }
 
 // ════════════════════════════════════════════════════════════════════════════

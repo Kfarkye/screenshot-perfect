@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef, type FC } from 'react';
 import { PickData, GameData } from '../types';
 import { Clock, DollarSign, Send, BarChart3, Target, Brain, Loader2, AlertTriangle, RefreshCw, LucideIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
-import { useStreamingAIChat, ChatMessage } from '@/hooks/useStreamingAIChat';
+import { useStreamingAIChat, type Message } from '@/hooks/useStreamingAIChat';
 import { calculateEV, calculateFairLine } from '@/utils/bettingMath';
 import { cn } from '@/lib/utils';
 
@@ -64,7 +64,7 @@ const StakingBands = React.memo(() => (
 ));
 StakingBands.displayName = 'StakingBands';
 
-const ChatBubble: React.FC<{ message: ChatMessage | { content: string, role: 'stream' } }> = React.memo(({ message }) => (
+const ChatBubble: React.FC<{ message: Message | { content: string, role: 'stream' } }> = React.memo(({ message }) => (
   <div
     className={cn(
       "p-3 rounded-xl text-sm whitespace-pre-wrap transition-all duration-150",
@@ -84,8 +84,9 @@ interface AIChatPanelProps {
 }
 
 const AIChatPanel: React.FC<AIChatPanelProps> = ({ game, pick }) => {
-  const { messages, isLoading, currentStream, sendMessage, chatEndRef, resetChat } = useStreamingAIChat(game, pick);
+  const { messages, isLoading, isStreaming, sendMessage, clear } = useStreamingAIChat();
   const [inputMessage, setInputMessage] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = useCallback(() => {
     if (inputMessage.trim() && !isLoading) {
@@ -108,7 +109,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ game, pick }) => {
           <Brain size={18} className="text-accent" />
           AI Analyst Chat
         </h3>
-        <Button variant="ghost" size="icon" onClick={resetChat} disabled={isLoading} title="Reset Chat" className="h-8 w-8">
+        <Button variant="ghost" size="icon" onClick={clear} disabled={isLoading} title="Reset Chat" className="h-8 w-8">
           <RefreshCw size={14}/>
         </Button>
       </div>
@@ -126,11 +127,13 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ game, pick }) => {
             <ChatBubble key={msg.id} message={msg} />
           ))}
 
-          {currentStream && (
-            <ChatBubble message={{ content: currentStream, role: 'stream' }} />
+          {isStreaming && messages.length > 0 && messages[messages.length - 1].role === 'assistant' && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-muted text-foreground mr-8 self-start">
+              <Loader2 className="h-4 w-4 animate-spin text-accent" />
+            </div>
           )}
 
-          {isLoading && !currentStream && (
+          {isLoading && messages.length === 0 && (
             <div className="flex items-center gap-2 p-3 rounded-xl bg-muted text-muted-foreground mr-8 self-start">
               <Loader2 className="h-4 w-4 animate-spin text-accent" />
               <span className="text-sm">Analyzing...</span>
