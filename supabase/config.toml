@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.web-search]
 verify_jwt = true
+
+[functions.sync-sports-knowledge]
+verify_jwt = false
