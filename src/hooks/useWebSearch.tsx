@@ -82,6 +82,12 @@ const SEARCH_TRIGGERS = {
     'got traded',
     'which team',
     'what team is',
+    'what team does',
+    'which team does',
+    'who does',
+    'play for',
+    ' on the ',  // with spaces to match "[player] on the [team]"
+    ' for the ', // "[player] for the [team]"
   ],
   // Recent events - ALWAYS search
   recent: [
@@ -169,6 +175,9 @@ export function detectSearchIntent(query: string): {
   confidence: number;
 } {
   const lowerQuery = query.toLowerCase();
+  
+  console.log('[Web Search] Testing query:', query);
+  console.log('[Web Search] Lowercase:', lowerQuery);
 
   // First check if it's a static knowledge question
   for (const trigger of NO_SEARCH_TRIGGERS) {
