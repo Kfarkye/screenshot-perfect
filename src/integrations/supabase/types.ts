@@ -2804,6 +2804,45 @@ export type Database = {
           },
         ]
       }
+      sports_knowledge: {
+        Row: {
+          category: string
+          created_at: string | null
+          data: Json
+          entity: string
+          id: string
+          league: string
+          source_url: string | null
+          updated_at: string | null
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          data: Json
+          entity: string
+          id?: string
+          league: string
+          source_url?: string | null
+          updated_at?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          data?: Json
+          entity?: string
+          id?: string
+          league?: string
+          source_url?: string | null
+          updated_at?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
       storage_items: {
         Row: {
           content: string | null
