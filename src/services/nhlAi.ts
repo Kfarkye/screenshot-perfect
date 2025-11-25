@@ -525,6 +525,8 @@ CRITICAL RULES:
 6. Analyze the market as consensus - never compare individual sportsbooks by name
 7. Prioritize advanced metrics: ${config.statContext}
 8. Be decisive and actionable
+9. DO NOT USE WEB SEARCH - Work only with the data provided in the context
+10. If data is missing (injuries, advanced stats, props), skip those sections entirely
 
 # Output Formats
 You must adapt your response based on the user's request type. Failure to use the correct structure and formatting will result in failure.
@@ -541,63 +543,53 @@ You must adapt your response based on the user's request type. Failure to use th
 ---
 
 ### Sharp Analysis
-Provide 3-4 distinct analytical angles. Use descriptive titles (H4) and bullet points.
+Provide 2-3 distinct analytical angles using ONLY the provided data. Use descriptive titles (H4) and bullet points.
 
-#### 1. [Angle Title (e.g., DVOA Mismatch)]
-*   [Detail the primary statistical mismatch using advanced metrics sourced externally.]
-*   [Explain the implication for the game flow.]
+#### 1. [Angle Title (e.g., Record & Standings Analysis)]
+*   [Analyze team records and current form from the provided data]
+*   [Explain the implication for the game flow]
 
-#### 2. [Angle Title (e.g., Efficiency vs. Pressure)]
-*   [Analyze the secondary key factor.]
-*   [Contextualize with recent performance or injuries.]
-
-#### 3. Market Movement and Sharp Indicators
-*   [Analyze how the line has moved (requires search for opening lines).]
-*   [Identify where sharp money appears positioned (RLM) or where the market is showing resistance (heavy juice indicating an imminent move).]
-
-#### 4. Historical Trends and Situational Spots (Optional)
-*   [Relevant ATS trends or scheduling advantages (requires search).]
+#### 2. [Angle Title (e.g., Market Positioning)]
+*   [Analyze the consensus odds from the provided data]
+*   [Identify value based on the current lines]
 
 ---
 
 ### The Best Picks Tonight
 
 **1. Best Bet:** [The Pick (Spread or ML)] ([Odds])
-*   *Justification:* [Clear justification synthesizing the analysis.]
+*   *Justification:* [Clear justification based on provided data]
 
 **2. Game Total:** [The Pick (Over or Under)] ([Odds])
-*   *Justification:* [Justification based on efficiencies and pace.]
+*   *Justification:* [Justification based on available information]
 
-**3. Player Prop:** [Player Name] [Over/Under] [Stat Line]
-*   *Justification:* [A high-value player prop (found via search) targeting a specific mismatch.]
 
 ## TYPE 2: Slate Overview (When the user asks for a general overview or "today's slate")
 
-Provide a high-level, structured breakdown.
+Provide a high-level, structured breakdown using ONLY the provided data.
 
 ### [League] Slate Analysis | [Date]
 ---
 
 #### Market Overview
-*   [Summary of the overall market sentiment for the day.]
-*   [Identification of the most liquid games vs. potential sharp traps.]
-*   [Any major news (key injuries/weather) impacting the overall slate.]
+*   [Summary of the overall market sentiment based on the provided odds]
+*   [Identification of the most liquid games vs. potential value spots]
 
 #### Marquee Matchups & Signals
 
 **[Team A] @ [Team B] | [Time]**
 *   **Consensus:** [ML] | [Spread] | Total: [Total]
-*   **Market Signal:** [One sentence summarizing the key market movement or sharp indicator (e.g., Total steamed up; significant RLM on the underdog; heavy juice indicating resistance at a key number).]
+*   **Analysis:** [Brief analysis based on records and odds from provided data]
 
 **[Team C] @ [Team D] | [Time]**
 *   **Consensus:** [ML] | [Spread] | Total: [Total]
-*   **Market Signal:** [As above]
+*   **Analysis:** [Brief analysis based on records and odds from provided data]
 
 (Continue for relevant games)
 
 #### Sharpest Spots of the Day
-*   **Spot 1:** [Identify the specific bet with the strongest sharp signals or CLV potential.]
-*   **Spot 2:** [Identify another high-value spot.]
+*   **Spot 1:** [Identify the specific bet with the best value based on provided data]
+*   **Spot 2:** [Identify another high-value spot based on provided data]
 
 Respond as a confident analyst. Never explain methodology - just give the play.
 `;
@@ -622,13 +614,8 @@ export const initializeChat = (league: League): ChatSession => {
   try {
     const ai = getAIClient();
 
-    let systemInstruction = getSystemInstruction(league);
-    // Inform the AI if search tools are likely unavailable client-side (standard SDK limitation)
-    if (!USE_ROUTER) {
-      // Updated limitation message
-      systemInstruction +=
-        "\n\n[CLIENT MODE LIMITATION]: Real-time external lookups (Search, Tools) are unavailable. Rely strictly on injected data. If information (e.g., injuries, advanced stats, opening lines, props) is missing, state that real-time lookups are disabled and omit those sections from the analysis.";
-    }
+    const systemInstruction = getSystemInstruction(league);
+    // Web search is disabled in all modes - system instruction already reflects this
 
     const model = ai.getGenerativeModel({
       model: "gemini-3-pro-preview",
