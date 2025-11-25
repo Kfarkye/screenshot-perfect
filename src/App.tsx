@@ -405,7 +405,7 @@ const App: React.FC = () => {
 
           if (msgs) {
             const formattedMsgs: Message[] = msgs.map((m) => ({
-              id: m.id,
+              id: String(m.id),
               // Map backend roles ('user', 'assistant') to frontend roles ('user', 'model')
               role: (m.role === "user" ? "user" : "model") as "user" | "model",
               content: m.content,
@@ -492,7 +492,7 @@ const App: React.FC = () => {
         role: "model",
         content: "", // Start empty
         timestamp: Date.now(),
-        status: "streaming",
+        status: "processing",
       };
 
       // CRITICAL: Use functional updates to capture the correct history snapshot and update the state simultaneously
