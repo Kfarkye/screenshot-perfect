@@ -687,14 +687,13 @@ const sendViaRouter = async (
     { role: "user", content: contextInjection },
   ];
 
-  // Updated Payload to include tools and generation configuration
+  // Updated Payload - NO WEB SEARCH
   const payload = {
     messages: messages,
     mode: "chat",
     preferredProvider: "gemini",
     stream: true, // Explicitly request streaming from the backend router
-    // Crucial addition: Enable tools on the backend if the router supports it.
-    tools: ["google_search"],
+    // NO TOOLS - Web search disabled
     // Crucial addition: Ensure precision on the backend
     generationConfig: { temperature: 0.4 },
   };

@@ -374,7 +374,7 @@ export function routeMessage(message: string): RouteResult {
       provider: "gemini",
       injectOdds: false,
       injectKnowledge: true,
-      useSearchMode: true,
+      useSearchMode: false, // WEB SEARCH DISABLED
     };
   }
 
