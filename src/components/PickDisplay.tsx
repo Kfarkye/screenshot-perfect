@@ -312,11 +312,7 @@ const CompactPick: FC<CompactPickProps> = React.memo(({ pick, onClick, className
         "w-full p-3 rounded-xl text-left",
         "bg-glass-surface border border-glass-border",
         "transition-all duration-150 ease-standard",
-        onClick && [
-          "cursor-pointer",
-          "hover:border-content-tertiary/50 hover:bg-surface-secondary/50",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        ],
+        onClick && "cursor-pointer hover:border-content-tertiary/50 hover:bg-surface-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         !onClick && "cursor-default",
         className,
       )}
@@ -369,13 +365,7 @@ const ExpandedPick: FC<ExpandedPickProps> = React.memo(
           "group w-full p-5 rounded-2xl text-left",
           "bg-glass-surface backdrop-blur-xl border border-glass-border",
           "transition-all duration-200 ease-standard",
-          onClick && [
-            "cursor-pointer",
-            "hover:border-content-tertiary/50 hover:shadow-lg",
-            "hover:bg-surface-secondary/30",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-            "focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary",
-          ],
+          onClick && "cursor-pointer hover:border-content-tertiary/50 hover:shadow-lg hover:bg-surface-secondary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary",
           !onClick && "cursor-default",
           className,
         )}
@@ -463,12 +453,7 @@ const DefaultPick: FC<DefaultPickProps> = React.memo(({ pick, onClick, showTimes
         "group w-full p-4 rounded-xl text-left",
         "bg-glass-surface border border-glass-border",
         "transition-all duration-150 ease-standard",
-        onClick && [
-          "cursor-pointer",
-          "hover:border-content-tertiary/50 hover:bg-surface-secondary/50",
-          "hover:shadow-md",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        ],
+        onClick && "cursor-pointer hover:border-content-tertiary/50 hover:bg-surface-secondary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         !onClick && "cursor-default",
         className,
       )}
