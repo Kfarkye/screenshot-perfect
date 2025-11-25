@@ -340,7 +340,7 @@ export function routeMessage(message: string): RouteResult {
       intent: 'research',
       model: 'google/gemini-2.5-pro',
       injectKnowledge: true,
-      useWebSearch: true,
+      useWebSearch: false,
     };
   }
   
