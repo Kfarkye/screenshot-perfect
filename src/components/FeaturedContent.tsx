@@ -3,16 +3,24 @@
  * @description Institutional-grade featured insights carousel
  *
  * @metanotes {
- *   "design_system": "ESSENCE v3.1",
- *   "aesthetic": "Jony Ive × Stripe × DraftKings",
- *   "tokens": "glass-surface, content-primary, accent, semantic-*",
- *   "motion": "duration-150/250/400, ease-standard/decelerate",
- *   "status": "Production Ready (Post-Audit)"
+ *   "design_system": "ESSENCE v3.1",
+ *   "aesthetic": "Jony Ive × Stripe × DraftKings",
+ *   "tokens": "glass-surface, content-primary, accent, semantic-*",
+ *   "motion": "duration-150/250/400, ease-standard/decelerate",
+ *   "status": "Production Ready (v2.2 - Pristine)"
  * }
  */
 
-import React, { useRef, useState, useCallback, useEffect, type FC, type RefObject } from "react";
-// Import ImageOff for image loading fallback
+import React, {
+  useRef,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  type FC,
+  type RefObject,
+  type CSSProperties,
+} from "react";
 import {
   Clock,
   TrendingUp,
@@ -23,12 +31,13 @@ import {
   Zap,
   BarChart3,
   ImageOff,
+  AlertCircle,
 } from "lucide-react";
 import type { League } from "../types";
 import { useFeaturedPicks } from "@/hooks/useFeaturedPicks";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPE DEFINITIONS (No Changes)
+// TYPE DEFINITIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ArticleType = "Analysis" | "Pick" | "Video" | "Props";
@@ -63,8 +72,28 @@ interface ArticleCardProps {
   readonly index: number;
 }
 
+interface NavButtonProps {
+  readonly direction: "left" | "right";
+  readonly disabled: boolean;
+  readonly onClick: () => void;
+}
+
+interface EdgeFadeProps {
+  readonly side: "left" | "right";
+  readonly visible: boolean;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// UTILITIES (No Changes)
+// CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SCROLL_THRESHOLD = 4;
+const SCROLL_AMOUNT_PERCENTAGE = 0.8;
+const ANIMATION_STAGGER_MS = 60;
+const SKELETON_COUNT = 4;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILITIES
 // ─────────────────────────────────────────────────────────────────────────────
 
 const cn = (...classes: (string | boolean | undefined | null)[]): string => {
@@ -73,6 +102,7 @@ const cn = (...classes: (string | boolean | undefined | null)[]): string => {
 
 const getTypeIcon = (type: ArticleType): React.ReactNode => {
   const iconProps = { size: 10, strokeWidth: 2.5 };
+
   switch (type) {
     case "Pick":
       return <CheckCircle2 {...iconProps} className="text-semantic-success" />;
@@ -82,6 +112,8 @@ const getTypeIcon = (type: ArticleType): React.ReactNode => {
       return <BarChart3 {...iconProps} className="text-accent" />;
     case "Props":
       return <TrendingUp {...iconProps} className="text-semantic-warning" />;
+    default:
+      return <BarChart3 {...iconProps} className="text-accent" />;
   }
 };
 
@@ -92,34 +124,64 @@ const getConfidenceColor = (confidence: number): string => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCROLL HOOK (REFACTORED)
+// STYLES
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Robust horizontal scroll hook using ResizeObserver for dynamic content synchronization.
- */
+const carouselStyles = `
+  @keyframes cardFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .card-enter-animation {
+    opacity: 0;
+    animation: cardFadeIn 0.4s ease-out forwards;
+    animation-delay: var(--animation-delay, 0ms);
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCROLL HOOK
+// ─────────────────────────────────────────────────────────────────────────────
+
 const useHorizontalScroll = (ref: RefObject<HTMLDivElement | null>) => {
   const [scrollState, setScrollState] = useState<ScrollState>({
     canScrollLeft: false,
-    // Initialize to false to prevent flicker until measurement occurs
     canScrollRight: false,
   });
 
   const checkScroll = useCallback(() => {
     if (!ref.current) return;
+
     const { scrollLeft, scrollWidth, clientWidth } = ref.current;
-    // Use a small threshold (4px) for cross-browser robustness
+
     setScrollState({
-      canScrollLeft: scrollLeft > 4,
-      canScrollRight: scrollWidth > clientWidth && scrollLeft < scrollWidth - clientWidth - 4,
+      canScrollLeft: scrollLeft > SCROLL_THRESHOLD,
+      canScrollRight: scrollWidth > clientWidth && scrollLeft < scrollWidth - clientWidth - SCROLL_THRESHOLD,
     });
   }, [ref]);
 
   const scroll = useCallback(
     (direction: "left" | "right") => {
       if (!ref.current) return;
-      // FIX: Dynamic Scroll Amount (e.g., 80% of the visible container width)
-      const scrollAmount = ref.current.clientWidth * 0.8;
+
+      const scrollAmount = ref.current.clientWidth * SCROLL_AMOUNT_PERCENTAGE;
+
       ref.current.scrollBy({
         left: direction === "left" ? -scrollAmount : scrollAmount,
         behavior: "smooth",
@@ -132,14 +194,10 @@ const useHorizontalScroll = (ref: RefObject<HTMLDivElement | null>) => {
     const element = ref.current;
     if (!element) return;
 
-    // Initial check
     checkScroll();
 
-    // 1. Listen to scroll events
     element.addEventListener("scroll", checkScroll, { passive: true });
 
-    // 2. FIX: Use ResizeObserver instead of window.resize.
-    // This detects changes in the element's dimensions caused by content loading OR window resizing.
     const resizeObserver = new ResizeObserver(() => {
       checkScroll();
     });
@@ -147,68 +205,73 @@ const useHorizontalScroll = (ref: RefObject<HTMLDivElement | null>) => {
 
     return () => {
       element.removeEventListener("scroll", checkScroll);
-      resizeObserver.disconnect(); // Clean up observer
+      resizeObserver.disconnect();
     };
   }, [ref, checkScroll]);
 
-  // checkScroll no longer needs to be exposed
   return { ...scrollState, scroll };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ARTICLE CARD COMPONENT (REFACTORED)
+// ARTICLE CARD COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ArticleCard: FC<ArticleCardProps> = React.memo(({ article, onClick, index }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
-  // FIX: Add image error handling state
   const [imageError, setImageError] = useState(false);
 
-  const handleImageError = () => {
-    setImageLoaded(true); // Ensure skeleton stops
+  const handleImageLoad = useCallback(() => {
+    setImageLoaded(true);
+  }, []);
+
+  const handleImageError = useCallback(() => {
+    setImageLoaded(true);
     setImageError(true);
-  };
+  }, []);
+
+  const cardStyle = useMemo<CSSProperties>(
+    () =>
+      ({
+        "--animation-delay": `${index * ANIMATION_STAGGER_MS}ms`,
+      }) as CSSProperties,
+    [index],
+  );
 
   return (
     <button
       onClick={onClick}
-      // FIX: Add role for A11y list semantics
       role="listitem"
       aria-label={`Read article: ${article.title}`}
       className={cn(
-        // Base - ESSENCE Glass Surface
-        "group/card relative flex-shrink-0 snap-center text-left",
+        "group/card relative flex-shrink-0 snap-start text-left",
         "w-[280px] md:w-[320px]",
         "rounded-2xl overflow-hidden",
-        "bg-glass-surface backdrop-blur-xl backdrop-saturate-default",
-        "border border-glass-border", // Motion - ESSENCE duration-250, ease-standard
-        "transition-all duration-250 ease-standard", // Hover states
+        "bg-glass-surface backdrop-blur-xl backdrop-saturate-150",
+        "border border-glass-border",
+        "transition-all duration-250 ease-standard",
         "hover:border-content-tertiary/50",
         "hover:shadow-xl",
-        "motion-safe:hover:-translate-y-1 motion-safe:hover:scale-[1.01]", // Focus
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary",
-        // FIX: Add animation class defined in the main component styles
+        "motion-safe:hover:-translate-y-1 motion-safe:hover:scale-[1.01]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        "focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary",
         "card-enter-animation",
       )}
-      // FIX: Use CSS variable for dynamic delay, remove inline animation definition
-      style={
-        {
-          "--animation-delay": `${index * 60}ms`,
-        } as React.CSSProperties
-      } // Cast required for CSS variables in TS
+      style={cardStyle}
     >
-            {/* Image Container */}     {" "}
+      {/* Image Container */}
       <div className="relative h-40 w-full overflow-hidden bg-surface-secondary">
-                {/* Skeleton loader */}
-               {" "}
+        {/* Skeleton loader */}
         <div
           className={cn(
-            "absolute inset-0 bg-gradient-to-r from-surface-secondary via-surface-tertiary to-surface-secondary",
+            "absolute inset-0",
+            "bg-gradient-to-r from-surface-secondary via-surface-tertiary to-surface-secondary",
             "animate-pulse transition-opacity duration-400",
             imageLoaded ? "opacity-0" : "opacity-100",
           )}
+          aria-hidden="true"
         />
-        {/* FIX: Image or Fallback */}
+
+        {/* Image or Fallback */}
         {imageError ? (
           <div
             className="absolute inset-0 flex items-center justify-center text-content-tertiary/30"
@@ -221,11 +284,10 @@ const ArticleCard: FC<ArticleCardProps> = React.memo(({ article, onClick, index 
             src={article.imageUrl}
             alt=""
             loading="lazy"
-            // FIX: Add explicit dimensions for CLS optimization
             width={320}
             height={160}
-            onLoad={() => setImageLoaded(true)}
-            onError={handleImageError} // Add error handler
+            onLoad={handleImageLoad}
+            onError={handleImageError}
             className={cn(
               "absolute inset-0 w-full h-full object-cover",
               "transition-all duration-400 ease-decelerate",
@@ -234,31 +296,48 @@ const ArticleCard: FC<ArticleCardProps> = React.memo(({ article, onClick, index 
             )}
           />
         )}
-                {/* Gradient overlay */}
-               {" "}
-        <div className="absolute inset-0 bg-gradient-to-t from-surface-primary via-surface-primary/40 to-transparent" />
-                {/* Premium indicator */}       {" "}
+
+        {/* Gradient overlay */}
+        <div
+          className="absolute inset-0 bg-gradient-to-t from-surface-primary via-surface-primary/40 to-transparent"
+          aria-hidden="true"
+        />
+
+        {/* Premium indicator */}
         {article.isPremium && (
           <div className="absolute top-3 right-3 z-10">
-                       {" "}
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-semantic-warning/20 backdrop-blur-md text-caption-2 font-bold text-semantic-warning uppercase tracking-wider border border-semantic-warning/30">
-                            <Zap size={8} fill="currentColor" />              Pro            {" "}
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full",
+                "bg-semantic-warning/20 backdrop-blur-md",
+                "text-caption-2 font-bold text-semantic-warning uppercase tracking-wider",
+                "border border-semantic-warning/30",
+              )}
+            >
+              <Zap size={8} fill="currentColor" />
+              Pro
             </span>
-                     {" "}
           </div>
         )}
-                {/* Type tag */}       {" "}
+
+        {/* Type tag */}
         <div className="absolute top-3 left-3 z-10">
-                   {" "}
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-primary/60 backdrop-blur-md text-caption-2 font-bold text-content-primary uppercase tracking-wider border border-glass-border shadow-md">
-                        {getTypeIcon(article.type)}            {article.tag}         {" "}
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg",
+              "bg-surface-primary/60 backdrop-blur-md",
+              "text-caption-2 font-bold text-content-primary uppercase tracking-wider",
+              "border border-glass-border shadow-md",
+            )}
+          >
+            {getTypeIcon(article.type)}
+            {article.tag}
           </span>
-                 {" "}
         </div>
-                {/* Confidence score */}       {" "}
+
+        {/* Confidence score */}
         {article.confidence && (
           <div className="absolute bottom-3 right-3 z-10">
-                       {" "}
             <span
               className={cn(
                 "inline-flex items-center gap-1 px-2 py-1",
@@ -268,44 +347,58 @@ const ArticleCard: FC<ArticleCardProps> = React.memo(({ article, onClick, index 
                 getConfidenceColor(article.confidence),
               )}
             >
-                            {article.confidence}%            {" "}
+              {article.confidence}%
             </span>
-                     {" "}
           </div>
         )}
-             {" "}
       </div>
-            {/* Content */}     {" "}
-      <div className="p-4 flex flex-col gap-3 h-[108px]">
-               {" "}
-        <h4 className="font-semibold text-content-primary text-body leading-snug line-clamp-2 transition-colors duration-150 group-hover/card:text-accent">
-                    {article.title}       {" "}
+
+      {/* Content */}
+      <div className="p-4 flex flex-col gap-3 min-h-[108px]">
+        <h4
+          className={cn(
+            "font-semibold text-content-primary text-body leading-snug line-clamp-2",
+            "transition-colors duration-150",
+            "group-hover/card:text-accent",
+          )}
+        >
+          {article.title}
         </h4>
-               {" "}
+
         <div className="mt-auto flex items-center justify-between pt-3 border-t border-glass-border">
-                    {/* Author */}         {" "}
+          {/* Author */}
           <span className="flex items-center gap-2 text-caption-1 text-content-secondary truncate max-w-[160px]">
-                       {" "}
-            <span className="w-5 h-5 rounded-full bg-surface-secondary flex-shrink-0 flex items-center justify-center text-caption-2 font-bold text-content-tertiary border border-surface-tertiary">
-                            {article.author.charAt(0)}           {" "}
+            <span
+              className={cn(
+                "w-5 h-5 rounded-full flex-shrink-0",
+                "flex items-center justify-center",
+                "bg-surface-secondary border border-surface-tertiary",
+                "text-caption-2 font-bold text-content-tertiary",
+              )}
+            >
+              {article.author.charAt(0)}
             </span>
-                        <span className="truncate font-medium">{article.author}</span>         {" "}
+            <span className="truncate font-medium">{article.author}</span>
           </span>
-                    {/* Timestamp */}         {" "}
+
+          {/* Timestamp */}
           <span className="flex-shrink-0 flex items-center gap-1 text-caption-2 font-mono text-content-tertiary">
-                        <Clock size={10} strokeWidth={2} />            {article.timeAgo}         {" "}
+            <Clock size={10} strokeWidth={2} />
+            {article.timeAgo}
           </span>
-                 {" "}
         </div>
-             {" "}
       </div>
-            {/* Hover glow effect */}
-           {" "}
+
+      {/* Hover glow effect */}
       <div
-        className="absolute inset-0 rounded-2xl opacity-0 group-hover/card:opacity-100 transition-opacity duration-400 pointer-events-none bg-gradient-to-t from-accent/5 via-transparent to-transparent"
+        className={cn(
+          "absolute inset-0 rounded-2xl pointer-events-none",
+          "bg-gradient-to-t from-accent/5 via-transparent to-transparent",
+          "opacity-0 group-hover/card:opacity-100",
+          "transition-opacity duration-400",
+        )}
         aria-hidden="true"
       />
-         {" "}
     </button>
   );
 });
@@ -313,17 +406,12 @@ const ArticleCard: FC<ArticleCardProps> = React.memo(({ article, onClick, index 
 ArticleCard.displayName = "ArticleCard";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NAV BUTTON COMPONENT (No Changes)
+// NAV BUTTON COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
-
-interface NavButtonProps {
-  direction: "left" | "right";
-  disabled: boolean;
-  onClick: () => void;
-}
 
 const NavButton: FC<NavButtonProps> = React.memo(({ direction, disabled, onClick }) => {
   const Icon = direction === "left" ? ChevronLeft : ChevronRight;
+
   return (
     <button
       onClick={onClick}
@@ -336,10 +424,14 @@ const NavButton: FC<NavButtonProps> = React.memo(({ direction, disabled, onClick
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         disabled
           ? "opacity-30 cursor-not-allowed bg-transparent text-content-tertiary"
-          : "bg-glass-surface hover:bg-surface-secondary text-content-secondary hover:text-content-primary shadow-sm hover:shadow-md",
+          : cn(
+              "bg-glass-surface text-content-secondary",
+              "hover:bg-surface-secondary hover:text-content-primary",
+              "shadow-sm hover:shadow-md",
+            ),
       )}
     >
-            <Icon size={16} strokeWidth={2} />   {" "}
+      <Icon size={16} strokeWidth={2} />
     </button>
   );
 });
@@ -347,13 +439,86 @@ const NavButton: FC<NavButtonProps> = React.memo(({ direction, disabled, onClick
 NavButton.displayName = "NavButton";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN COMPONENT (REFACTORED)
+// LOADING SKELETON
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LoadingSkeleton: FC = React.memo(() => (
+  <>
+    {Array.from({ length: SKELETON_COUNT }).map((_, idx) => (
+      <div
+        key={`skeleton-${idx}`}
+        className={cn(
+          "flex-shrink-0 snap-start",
+          "w-[280px] md:w-[320px] h-[248px]",
+          "rounded-2xl bg-surface-secondary animate-pulse",
+        )}
+        aria-hidden="true"
+      />
+    ))}
+  </>
+));
+
+LoadingSkeleton.displayName = "LoadingSkeleton";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ERROR STATE
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ErrorState: FC = React.memo(() => (
+  <div
+    className={cn(
+      "w-full py-12 px-6 text-center rounded-2xl",
+      "text-semantic-error bg-semantic-error/5 border border-semantic-error/20",
+    )}
+    role="alert"
+  >
+    <AlertCircle size={24} className="mx-auto mb-2" />
+    <p className="text-body-sm font-medium">Error loading insights. Please try again later.</p>
+  </div>
+));
+
+ErrorState.displayName = "ErrorState";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMPTY STATE
+// ─────────────────────────────────────────────────────────────────────────────
+
+const EmptyState: FC = React.memo(() => (
+  <div className="w-full text-center py-8 text-content-tertiary">
+    <BarChart3 size={24} className="mx-auto mb-2 opacity-50" />
+    <p className="text-body-sm">No premium picks available yet. Check back soon!</p>
+  </div>
+));
+
+EmptyState.displayName = "EmptyState";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDGE FADE INDICATOR
+// ─────────────────────────────────────────────────────────────────────────────
+
+const EdgeFade: FC<EdgeFadeProps> = React.memo(({ side, visible }) => (
+  <div
+    className={cn(
+      "absolute top-[72px] bottom-4 w-8 pointer-events-none",
+      "transition-opacity duration-250",
+      side === "left"
+        ? "left-0 bg-gradient-to-r from-surface-primary to-transparent"
+        : "right-0 bg-gradient-to-l from-surface-primary to-transparent",
+      visible ? "opacity-100" : "opacity-0",
+    )}
+    aria-hidden="true"
+  />
+));
+
+EdgeFade.displayName = "EdgeFade";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const FeaturedContent: FC<FeaturedContentProps> = ({ league, onArticleClick, className = "" }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { canScrollLeft, canScrollRight, scroll } = useHorizontalScroll(scrollRef);
-  // FIX: Destructure error state (assuming the hook provides it)
   const { picks: articles, loading, error } = useFeaturedPicks(league);
 
   const handleArticleClick = useCallback(
@@ -361,147 +526,101 @@ export const FeaturedContent: FC<FeaturedContentProps> = ({ league, onArticleCli
       onArticleClick(`Summarize the analysis for: ${title}`);
     },
     [onArticleClick],
-  ); // FIX: Enhanced Keyboard navigation
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      // Only scroll if the focus is on the container itself, not a child button (ArticleCard)
       if (e.target !== scrollRef.current) return;
 
       if (e.key === "ArrowLeft") {
-        e.preventDefault(); // Prevent default browser scroll
+        e.preventDefault();
         scroll("left");
       }
+
       if (e.key === "ArrowRight") {
         e.preventDefault();
         scroll("right");
       }
     },
-    // Add scrollRef to dependencies
-    [scroll, scrollRef],
+    [scroll],
   );
 
-  // Removed onKeyDown from <section>
+  const handleScrollLeft = useCallback(() => scroll("left"), [scroll]);
+  const handleScrollRight = useCallback(() => scroll("right"), [scroll]);
+
+  const renderContent = useMemo(() => {
+    if (error) {
+      return <ErrorState />;
+    }
+
+    if (loading) {
+      return <LoadingSkeleton />;
+    }
+
+    if (articles.length === 0) {
+      return <EmptyState />;
+    }
+
+    return articles.map((article, index) => (
+      <ArticleCard key={article.id} article={article} index={index} onClick={() => handleArticleClick(article.title)} />
+    ));
+  }, [error, loading, articles, handleArticleClick]);
+
   return (
     <section className={cn("w-full relative my-8", className)} aria-label="Featured Insights">
-            {/* Keyframe styles - inject once */}
-      {/* FIX: Define keyframes AND the animation class utilizing CSS variables */}     {" "}
-      <style>{`
-        @keyframes cardFadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(8px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
+      {/* Injected styles */}
+      <style>{carouselStyles}</style>
 
-        /* Define the class that applies the animation and variable delay */
-        .card-enter-animation {
-          opacity: 0; /* Set initial state here instead of inline style */
-          animation: cardFadeIn 0.4s ease-out forwards;
-          animation-delay: var(--animation-delay, 0ms);
-        }
-      `}</style>
-            {/* Header */}     {" "}
+      {/* Header */}
       <div className="flex items-center justify-between mb-5 px-1">
-               {" "}
         <div className="flex items-center gap-3">
-                   {" "}
-          <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center border border-accent/20">
-                        <TrendingUp size={14} className="text-accent" strokeWidth={2.5} />         {" "}
+          <div
+            className={cn(
+              "w-8 h-8 rounded-lg",
+              "bg-accent/10 border border-accent/20",
+              "flex items-center justify-center",
+            )}
+          >
+            <TrendingUp size={14} className="text-accent" strokeWidth={2.5} />
           </div>
-                   {" "}
           <div>
-                       {" "}
-            <h3 className="text-body-sm font-semibold text-content-primary tracking-tight">Featured Insights</h3>       
-                <p className="text-caption-2 text-content-tertiary font-medium">AI-powered analysis • Updated live</p> 
-                   {" "}
+            <h3 className="text-body-sm font-semibold text-content-primary tracking-tight">Featured Insights</h3>
+            <p className="text-caption-2 text-content-tertiary font-medium">AI-powered analysis • Updated live</p>
           </div>
-                 {" "}
         </div>
-                {/* Navigation */}       {" "}
+
+        {/* Navigation */}
         <div className="flex gap-2" role="group" aria-label="Carousel navigation">
-                    <NavButton direction="left" disabled={!canScrollLeft} onClick={() => scroll("left")} />
-                    <NavButton direction="right" disabled={!canScrollRight} onClick={() => scroll("right")} />     
-           {" "}
+          <NavButton direction="left" disabled={!canScrollLeft} onClick={handleScrollLeft} />
+          <NavButton direction="right" disabled={!canScrollRight} onClick={handleScrollRight} />
         </div>
-             {" "}
       </div>
-            {/* Carousel */}     {" "}
+
+      {/* Carousel */}
       <div
         ref={scrollRef}
         role="list"
         tabIndex={0}
-        // FIX: Attach key handler here
         onKeyDown={handleKeyDown}
         className={cn(
           "flex gap-4 overflow-x-auto pb-4",
           "-mx-4 px-4 md:mx-0 md:px-0",
           "snap-x snap-mandatory",
+          "scroll-ps-4 md:scroll-ps-0",
           "scrollbar-hide",
           "focus-visible:outline-none",
         )}
         style={{
           scrollbarWidth: "none",
           msOverflowStyle: "none",
-          WebkitOverflowScrolling: "touch",
         }}
       >
-        {/* FIX: Handle Error State */}
-        {error ? (
-          <div className="w-full py-12 px-6 text-center text-semantic-danger bg-semantic-danger/5 border border-semantic-danger/20 rounded-2xl">
-            <BarChart3 size={24} className="mx-auto mb-2" />
-            <p className="text-body-sm font-medium">Error loading insights. Please try again later.</p>
-          </div>
-        ) : loading ? (
-          // Loading skeleton
-          Array.from({ length: 4 }).map((_, idx) => (
-            <div
-              key={`skeleton-${idx}`}
-              className="flex-shrink-0 w-[280px] md:w-[320px] h-[248px] rounded-2xl bg-surface-secondary animate-pulse"
-            />
-          ))
-        ) : articles.length === 0 ? (
-          <div className="w-full text-center py-8 text-content-tertiary">
-                        No premium picks available yet. Check back soon!          {" "}
-          </div>
-        ) : (
-          articles.map((article, index) => (
-            <ArticleCard
-              key={article.id}
-              article={article}
-              index={index}
-              onClick={() => handleArticleClick(article.title)}
-            />
-          ))
-        )}
-             {" "}
+        {renderContent}
       </div>
-            {/* Edge fade indicators */}
-           {" "}
-      <div
-        className={cn(
-          "absolute left-0 top-[72px] bottom-4 w-8 pointer-events-none",
-          "bg-gradient-to-r from-surface-primary to-transparent",
-          "transition-opacity duration-250",
-          canScrollLeft ? "opacity-100" : "opacity-0",
-        )}
-        aria-hidden="true"
-      />
-           {" "}
-      <div
-        className={cn(
-          "absolute right-0 top-[72px] bottom-4 w-8 pointer-events-none",
-          "bg-gradient-to-l from-surface-primary to-transparent",
-          "transition-opacity duration-250",
-          canScrollRight ? "opacity-100" : "opacity-0",
-        )}
-        aria-hidden="true"
-      />
-         {" "}
+
+      {/* Edge fade indicators */}
+      <EdgeFade side="left" visible={canScrollLeft} />
+      <EdgeFade side="right" visible={canScrollRight} />
     </section>
   );
 };
