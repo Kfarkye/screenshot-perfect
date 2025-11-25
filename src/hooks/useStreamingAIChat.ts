@@ -45,17 +45,29 @@ Provide concise, insightful analysis. Do not ask the user which game they are re
 
     // Step 1: Detect if we need web search
     const searchIntent = detectSearchIntent(inputMessage);
+    console.log('[Web Search] Intent detection:', { 
+      query: inputMessage, 
+      shouldSearch: searchIntent.shouldSearch, 
+      category: searchIntent.category,
+      confidence: searchIntent.confidence 
+    });
+    
     let augmentedSystemPrompt = systemPrompt;
 
     // Step 2: If search is needed, call web-search edge function
     if (searchIntent.shouldSearch) {
+      console.log('[Web Search] Calling edge function...');
       try {
         const { data: searchData, error: searchError } = await supabase.functions.invoke('web-search', {
           body: { query: inputMessage, maxResults: 5 }
         });
 
+        console.log('[Web Search] Response:', { data: searchData, error: searchError });
+
         if (!searchError && searchData) {
           const formattedResults = formatResultsForAI(searchData);
+          console.log('[Web Search] Formatted results length:', formattedResults.length);
+          
           // Step 3: Prepend search results to system prompt
           augmentedSystemPrompt = `LIVE WEB SEARCH RESULTS:
 ${formattedResults}
@@ -63,10 +75,14 @@ ${formattedResults}
 Use these results to answer. They are more current than your training data.
 
 ${systemPrompt}`;
+        } else if (searchError) {
+          console.error('[Web Search] Error from edge function:', searchError);
         }
       } catch (searchErr) {
-        console.warn('Web search failed, proceeding without:', searchErr);
+        console.error('[Web Search] Exception:', searchErr);
       }
+    } else {
+      console.log('[Web Search] Skipping search - intent not detected');
     }
 
     const previousMessages = messages.filter(m => m.role !== 'error');
