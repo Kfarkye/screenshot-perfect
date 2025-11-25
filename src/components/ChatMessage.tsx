@@ -353,12 +353,16 @@ export const ChatMessage: FC<ChatMessageProps> = React.memo(
                 "relative px-4 py-3 rounded-2xl backdrop-blur-sm border",
                 "transition-all duration-200 ease-standard",
                 // User message styling
-                isUser && ["bg-accent text-content-inverse border-accent/50", "rounded-tr-md"],
+                isUser && "bg-accent text-content-inverse border-accent/50",
+                isUser && "rounded-tr-md",
                 // Assistant message styling
-                !isUser &&
-                  !isError && ["bg-glass-surface border-glass-border", "text-content-primary", "rounded-tl-md"],
+                !isUser && !isError && "bg-glass-surface border-glass-border",
+                !isUser && !isError && "text-content-primary",
+                !isUser && !isError && "rounded-tl-md",
                 // Error styling
-                isError && ["bg-semantic-error/5 border-semantic-error/20", "text-content-primary", "rounded-tl-md"],
+                isError && "bg-semantic-error/5 border-semantic-error/20",
+                isError && "text-content-primary",
+                isError && "rounded-tl-md",
                 // Streaming effect
                 showStreamingIndicator && "border-accent/30",
               )}
