@@ -69,11 +69,9 @@ const ChatBubble: React.FC<{ message: ChatMessage | { content: string, role: 'st
     className={cn(
       "p-3 rounded-xl text-sm whitespace-pre-wrap transition-all duration-150",
       message.role === 'user' && "bg-primary text-primary-foreground ml-8 self-end shadow-md",
-      (message.role === 'assistant' || message.role === 'stream') && "bg-muted text-foreground mr-8 self-start shadow-sm border border-border",
-      message.role === 'error' && "bg-red-500/10 text-red-500 mr-8 border border-red-500/40 flex items-start gap-2"
+      (message.role === 'assistant' || message.role === 'stream') && "bg-muted text-foreground mr-8 self-start shadow-sm border border-border"
     )}
   >
-    {message.role === 'error' && <AlertTriangle size={16} className='mt-0.5 shrink-0'/>}
     {message.content}
     {message.role === 'stream' && <span className="inline-block w-1.5 h-4 bg-accent ml-1 align-text-bottom animate-pulse"/>}
   </div>
