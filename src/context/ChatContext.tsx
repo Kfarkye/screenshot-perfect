@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { Message, League, GameData } from '../types';
-import { useAuth } from '../hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { sendMessageToAI } from '../services/nhlAi';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import { Message, League, GameData } from "../types";
+import { useAuth } from "../hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { sendMessageToAI } from "../services/nhlAi";
 
 interface ChatContextType {
   messages: Message[];
@@ -20,7 +20,7 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export const useChat = () => {
   const context = useContext(ChatContext);
   if (!context) {
-    throw new Error('useChat must be used within a ChatProvider');
+    throw new Error("useChat must be used within a ChatProvider");
   }
   return context;
 };
@@ -30,7 +30,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [activeLeague, setActiveLeague] = useState<League>('NHL');
+  const [activeLeague, setActiveLeague] = useState<League>("NHL");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isHydrating, setIsHydrating] = useState(true);
 
@@ -100,123 +100,136 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user, activeLeague]);
 
-  const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isLoading || isHydrating || !user) return;
+  const sendMessage = useCallback(
+    async (content: string) => {
+      if (!content.trim() || isLoading || isHydrating || !user) return;
 
-    setIsLoading(true);
+      setIsLoading(true);
 
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: content,
-      timestamp: Date.now(),
-      status: "complete",
-    };
-
-    const streamingAiMsgId = crypto.randomUUID();
-    const streamingAiMsg: Message = {
-      id: streamingAiMsgId,
-      role: "model",
-      content: "",
-      timestamp: Date.now(),
-      status: "processing",
-    };
-
-    let historySnapshot: Message[] = [];
-    setMessages((prev) => {
-      historySnapshot = [...prev];
-      return [...prev, userMsg, streamingAiMsg];
-    });
-
-    let fullResponseText = "";
-    let streamInitialized = false;
-    let currentConvId = conversationId;
-
-    try {
-      if (!currentConvId) {
-        const { data: newConv, error: convError } = await supabase
-          .from("ai_conversations")
-          .insert({
-            user_id: user.id,
-            title: `${activeLeague} Analysis`,
-            session_id: `sess_${crypto.randomUUID()}`,
-          })
-          .select("id")
-          .single();
-
-        if (convError || !newConv) throw new Error("Failed to establish conversation session.");
-        currentConvId = newConv.id;
-        setConversationId(currentConvId);
-      }
-
-      if (currentConvId) {
-        supabase.from("ai_messages").insert({
-          conversation_id: currentConvId,
-          role: "user",
-          content: content,
-        }).then(({ error }) => {
-          if (error) console.error("PersistUserMessage Error", error);
-        });
-      }
-
-      const handleChunk = (chunk: string) => {
-        if (!streamInitialized) {
-          setIsStreaming(true);
-          streamInitialized = true;
-        }
-        fullResponseText += chunk;
-        setMessages((prev) =>
-          prev.map((msg) => (msg.id === streamingAiMsgId ? { ...msg, content: fullResponseText } : msg)),
-        );
+      const userMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: content,
+        timestamp: Date.now(),
+        status: "complete",
       };
 
-      await sendMessageToAI(content, historySnapshot, activeLeague, handleChunk);
+      const streamingAiMsgId = crypto.randomUUID();
+      const streamingAiMsg: Message = {
+        id: streamingAiMsgId,
+        role: "model",
+        content: "",
+        timestamp: Date.now(),
+        status: "processing",
+      };
 
-      setIsStreaming(false);
+      let historySnapshot: Message[] = [];
+      setMessages((prev) => {
+        historySnapshot = [...prev];
+        return [...prev, userMsg, streamingAiMsg];
+      });
 
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === streamingAiMsgId ? { ...msg, status: "complete", timestamp: Date.now() } : msg,
-        ),
-      );
+      let fullResponseText = "";
+      let streamInitialized = false;
+      let currentConvId = conversationId;
 
-      if (currentConvId && fullResponseText) {
-        supabase.from("ai_messages").insert({
-          conversation_id: currentConvId,
-          role: "assistant",
-          content: fullResponseText,
-          model: "gemini-1.5-pro-optimized",
-        }).then(({ error }) => {
-          if (error) console.error("PersistAIMessage Error", error);
-        });
-      }
+      try {
+        if (!currentConvId) {
+          const { data: newConv, error: convError } = await supabase
+            .from("ai_conversations")
+            .insert({
+              user_id: user.id,
+              title: `${activeLeague} Analysis`,
+              session_id: `sess_${crypto.randomUUID()}`,
+            })
+            .select("id")
+            .single();
 
-    } catch (error) {
-      console.error("MessagePipelineStreamError", error);
-      setIsStreaming(false);
-      setMessages((prev) =>
-        prev.map((msg) => {
-          if (msg.id === streamingAiMsgId) {
-            return {
-              ...msg,
-              content: msg.content + `\n\n[System Error: ${error instanceof Error ? error.message : "The stream was interrupted."}]`,
-              status: "error",
-              isError: true,
-              timestamp: Date.now(),
-            };
+          if (convError || !newConv) throw new Error("Failed to establish conversation session.");
+          currentConvId = newConv.id;
+          setConversationId(currentConvId);
+        }
+
+        if (currentConvId) {
+          supabase
+            .from("ai_messages")
+            .insert({
+              conversation_id: currentConvId,
+              role: "user",
+              content: content,
+            })
+            .then(({ error }) => {
+              if (error) console.error("PersistUserMessage Error", error);
+            });
+        }
+
+        const handleChunk = (chunk: string) => {
+          if (!streamInitialized) {
+            setIsStreaming(true);
+            streamInitialized = true;
           }
-          return msg;
-        })
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isLoading, conversationId, user, activeLeague, isHydrating]);
+          fullResponseText += chunk;
+          setMessages((prev) =>
+            prev.map((msg) => (msg.id === streamingAiMsgId ? { ...msg, content: fullResponseText } : msg)),
+          );
+        };
 
-  const analyzeGame = useCallback((game: GameData) => {
-    const prompt = `Provide a sharp analysis for ${game.awayTeam} @ ${game.homeTeam}. Focus on advanced metrics (DVOA/EPA/xG), market movement, and identify the best spread/total/prop positions.`;
-    sendMessage(prompt);
-  }, [sendMessage]);
+        await sendMessageToAI(content, historySnapshot, activeLeague, handleChunk);
+
+        setIsStreaming(false);
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === streamingAiMsgId ? { ...msg, status: "complete", timestamp: Date.now() } : msg,
+          ),
+        );
+
+        if (currentConvId && fullResponseText) {
+          supabase
+            .from("ai_messages")
+            .insert({
+              conversation_id: currentConvId,
+              role: "assistant",
+              content: fullResponseText,
+              model: "gemini-3-pro-preview",
+            })
+            .then(({ error }) => {
+              if (error) console.error("PersistAIMessage Error", error);
+            });
+        }
+      } catch (error) {
+        console.error("MessagePipelineStreamError", error);
+        setIsStreaming(false);
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id === streamingAiMsgId) {
+              return {
+                ...msg,
+                content:
+                  msg.content +
+                  `\n\n[System Error: ${error instanceof Error ? error.message : "The stream was interrupted."}]`,
+                status: "error",
+                isError: true,
+                timestamp: Date.now(),
+              };
+            }
+            return msg;
+          }),
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isLoading, conversationId, user, activeLeague, isHydrating],
+  );
+
+  const analyzeGame = useCallback(
+    (game: GameData) => {
+      const prompt = `Provide a sharp analysis for ${game.awayTeam} @ ${game.homeTeam}. Focus on advanced metrics (DVOA/EPA/xG), market movement, and identify the best spread/total/prop positions.`;
+      sendMessage(prompt);
+    },
+    [sendMessage],
+  );
 
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -232,7 +245,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setActiveLeague,
         sendMessage,
         analyzeGame,
-        clearMessages
+        clearMessages,
       }}
     >
       {children}

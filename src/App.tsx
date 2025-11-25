@@ -580,7 +580,7 @@ const App: React.FC = () => {
               conversation_id: currentConvId,
               role: "assistant", // Use 'assistant' for backend compatibility
               content: fullResponseText,
-              model: "gemini-1.5-pro-optimized",
+              model: "gemini-3-pro-preview",
             })
             .then(({ error }) => {
               if (error) observability.logError(error, "PersistAIMessage");
@@ -695,7 +695,7 @@ const App: React.FC = () => {
             )}
           >
             <div className="flex-1 overflow-y-auto w-full px-4 md:px-6 py-6">
-              <FeaturedContent 
+              <FeaturedContent
                 league={activeLeague}
                 onArticleClick={(query) => {
                   setActiveTab("chat");

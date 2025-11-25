@@ -631,7 +631,7 @@ export const initializeChat = (league: League): ChatSession => {
     }
 
     const model = ai.getGenerativeModel({
-      model: "gemini-1.5-pro-latest",
+      model: "gemini-3-pro-preview",
       systemInstruction: systemInstruction,
     });
 
