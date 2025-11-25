@@ -145,12 +145,7 @@ const SendButton: FC<SendButtonProps> = memo(({ canSubmit, isLoading }) => {
         "transition-all duration-200 ease-standard",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
         canSubmit
-          ? [
-              "bg-accent text-content-inverse",
-              "shadow-lg shadow-accent/25",
-              "hover:bg-accent-hover hover:shadow-accent/35",
-              "hover:scale-105 active:scale-95",
-            ]
+          ? "bg-accent text-content-inverse shadow-lg shadow-accent/25 hover:bg-accent-hover hover:shadow-accent/35 hover:scale-105 active:scale-95"
           : "bg-surface-secondary text-content-tertiary opacity-50 cursor-not-allowed",
       )}
       aria-label={isLoading ? "Sending message..." : "Send message"}
@@ -184,11 +179,8 @@ const AttachmentButton: FC<AttachmentButtonProps> = memo(({ onClick, disabled, h
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         disabled
           ? "text-content-tertiary opacity-50 cursor-not-allowed"
-          : [
-              "text-content-tertiary hover:text-content-primary",
-              "hover:bg-surface-secondary/80",
-              hasAttachments && "text-accent",
-            ],
+          : "text-content-tertiary hover:text-content-primary hover:bg-surface-secondary/80",
+        !disabled && hasAttachments && "text-accent",
       )}
       aria-label="Attach files"
     >
@@ -221,11 +213,8 @@ const VoiceButton: FC<VoiceButtonProps> = memo(({ onClick, disabled, isRecording
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         disabled
           ? "text-content-tertiary opacity-50 cursor-not-allowed"
-          : [
-              "text-content-tertiary hover:text-content-primary",
-              "hover:bg-surface-secondary/80",
-              isRecording && "text-semantic-error bg-semantic-error/10 animate-pulse",
-            ],
+          : "text-content-tertiary hover:text-content-primary hover:bg-surface-secondary/80",
+        !disabled && isRecording && "text-semantic-error bg-semantic-error/10 animate-pulse",
       )}
       aria-label={isRecording ? "Stop recording" : "Start voice input"}
     >
@@ -702,14 +691,10 @@ export const InputArea = memo(
               "transition-all duration-200 ease-standard",
               // Focus state
               isFocused
-                ? ["bg-surface-primary/90 border-accent/30", "ring-4 ring-accent/10", "shadow-xl shadow-accent/5"]
-                : [
-                    "bg-glass-surface border-glass-border",
-                    "hover:border-glass-border/80 hover:bg-glass-surface/80",
-                    "shadow-lg",
-                  ],
+                ? "bg-surface-primary/90 border-accent/30 ring-4 ring-accent/10 shadow-xl shadow-accent/5"
+                : "bg-glass-surface border-glass-border hover:border-glass-border/80 hover:bg-glass-surface/80 shadow-lg",
               // Drag over state
-              isDragOver && ["border-accent border-dashed", "bg-accent/5"],
+              isDragOver && "border-accent border-dashed bg-accent/5",
               // Error state
               isOverLimit && "border-semantic-error/50 ring-semantic-error/10",
             )}
