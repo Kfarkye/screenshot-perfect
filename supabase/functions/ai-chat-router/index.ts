@@ -1,14 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { encodeBase64 } from "https://deno.land/std@0.208.0/encoding/base64.ts";
-
 import { corsHeaders } from "../_shared/cors.ts";
 import { handleSearchQuery } from "./searchRouter.ts";
-
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIGURATION & VALIDATION (Fail-fast initialization)
 // ═══════════════════════════════════════════════════════════════════════════
-
 const EnvSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
@@ -22,9 +19,7 @@ const EnvSchema = z.object({
   ENABLE_RATE_LIMITING: z.coerce.boolean().default(true),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 });
-
 type EnvConfig = z.infer<typeof EnvSchema>;
-
 function initializeEnvironment(): EnvConfig {
   try {
     return EnvSchema.parse(Deno.env.toObject());
@@ -41,11 +36,9 @@ function initializeEnvironment(): EnvConfig {
     throw new Error("Configuration Error: Invalid environment variables.");
   }
 }
-
 const env = initializeEnvironment();
 const SERVICE_NAME = "ai-chat-router";
 const DEPLOYMENT_REGION = Deno.env.get("DENO_REGION") || "unknown";
-
 const CONFIG = {
   API_CONNECT_TIMEOUT_MS: 60000, // Increased to 60s for complex queries with googleSearch
   STREAM_INACTIVITY_TIMEOUT_MS: 45000, // Increased to 45s
@@ -66,13 +59,11 @@ const CONFIG = {
   RATE_LIMIT_MAX_REQUESTS: 60,
   DEDUP_WINDOW_MS: 5000,
 } as const;
-
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
 } as const;
-
 const RequestBodySchema = z.object({
   messages: z
     .array(
@@ -89,23 +80,18 @@ const RequestBodySchema = z.object({
   idempotencyKey: z.string().max(255).optional(),
   preferredProvider: z.enum(["anthropic", "openai", "gemini", "auto"]).optional(),
 });
-
 type RequestBody = z.infer<typeof RequestBodySchema>;
 type ChatMessage = RequestBody["messages"][0];
-
 // ═══════════════════════════════════════════════════════════════════════════
 // INITIALIZATION
 // ═══════════════════════════════════════════════════════════════════════════
-
 const supabaseAdmin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 const encoder = new TextEncoder();
-
 // ═══════════════════════════════════════════════════════════════════════════
 // ERROR DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════
-
 class AppError extends Error {
   constructor(
     message: string,
@@ -117,7 +103,6 @@ class AppError extends Error {
     this.name = this.constructor.name;
   }
 }
-
 class ValidationError extends AppError {
   constructor(
     message: string,
@@ -126,13 +111,11 @@ class ValidationError extends AppError {
     super(message, 400, "VALIDATION_FAILED", false);
   }
 }
-
 class AuthError extends AppError {
   constructor(message = "Authentication failed.", code = "AUTH_FAILED", status = 401) {
     super(message, status, code, false);
   }
 }
-
 class ProviderError extends AppError {
   constructor(
     public provider: string,
@@ -143,38 +126,31 @@ class ProviderError extends AppError {
     super(`${provider} API error: ${message}`, 502, "UPSTREAM_API_ERROR", retryable);
   }
 }
-
 class TimeoutError extends AppError {
   constructor(message: string, code = "TIMEOUT") {
     super(message, 504, code, true);
   }
 }
-
 class RateLimitError extends AppError {
   constructor(message: string) {
     super(message, 429, "RATE_LIMIT_EXCEEDED", false);
   }
 }
-
 class CircuitBreakerError extends AppError {
   constructor(provider: string) {
     super(`Circuit breaker open for ${provider}. Service unavailable.`, 503, "CIRCUIT_BREAKER_OPEN", true);
   }
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // LOGGING & OBSERVABILITY
 // ═══════════════════════════════════════════════════════════════════════════
-
 const LOG_LEVELS = { TRACE: -1, DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
 const CURRENT_LOG_LEVEL = LOG_LEVELS[env.LOG_LEVEL];
-
 interface TraceContext {
   traceId: string;
   spanId: string;
   parentSpanId?: string;
 }
-
 interface RequestContext {
   requestId: string;
   trace: TraceContext;
@@ -182,20 +158,15 @@ interface RequestContext {
   logLevel: number;
   enableClientDebug: boolean;
 }
-
 interface LogContext extends Record<string, unknown> {
   ctx?: RequestContext;
   error?: unknown;
   provider?: string;
 }
-
 function log(level: keyof typeof LOG_LEVELS, message: string, meta: LogContext = {}) {
   const currentLogLevel = meta.ctx ? meta.ctx.logLevel : CURRENT_LOG_LEVEL;
-
   if (LOG_LEVELS[level] < currentLogLevel) return;
-
   const { error, ctx, ...restMeta } = meta;
-
   const logEntry: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     level,
@@ -208,7 +179,6 @@ function log(level: keyof typeof LOG_LEVELS, message: string, meta: LogContext =
     userId: ctx?.userId,
     ...restMeta,
   };
-
   if (error instanceof Error) {
     logEntry.error = {
       message: error.message,
@@ -223,9 +193,7 @@ function log(level: keyof typeof LOG_LEVELS, message: string, meta: LogContext =
   } else if (error) {
     logEntry.error = String(error);
   }
-
   const serializedLog = JSON.stringify(logEntry);
-
   switch (level) {
     case "ERROR":
       console.error(serializedLog);
@@ -237,7 +205,6 @@ function log(level: keyof typeof LOG_LEVELS, message: string, meta: LogContext =
       console.log(serializedLog);
   }
 }
-
 function createTraceContext(req: Request): TraceContext {
   const traceparent = req.headers.get("traceparent");
   if (traceparent) {
@@ -250,22 +217,17 @@ function createTraceContext(req: Request): TraceContext {
       };
     }
   }
-
   return {
     traceId: crypto.randomUUID().replaceAll("-", ""),
     spanId: crypto.randomUUID().replaceAll("-", "").substring(0, 16),
   };
 }
-
 function initializeRequestContext(req: Request): RequestContext {
   const requestId = crypto.randomUUID();
   const trace = createTraceContext(req);
-
   let logLevel = CURRENT_LOG_LEVEL;
   let enableClientDebug = false;
-
   const debugHeaderValue = req.headers.get("X-Debug-Mode");
-
   if (env.DEBUG_SECRET_HEADER_VALUE && debugHeaderValue === env.DEBUG_SECRET_HEADER_VALUE) {
     logLevel = LOG_LEVELS.TRACE;
     enableClientDebug = true;
@@ -280,7 +242,6 @@ function initializeRequestContext(req: Request): RequestContext {
       }),
     );
   }
-
   return {
     requestId,
     trace,
@@ -288,65 +249,52 @@ function initializeRequestContext(req: Request): RequestContext {
     enableClientDebug,
   };
 }
-
 class MetricsCollector {
   private metrics: Map<string, number[]> = new Map();
   private readonly MAX_SAMPLES = 100;
-
   record(metric: string, value: number) {
     if (!this.metrics.has(metric)) {
       this.metrics.set(metric, []);
     }
     const values = this.metrics.get(metric)!;
     values.push(value);
-
     if (values.length > this.MAX_SAMPLES) {
       values.shift();
     }
   }
-
   getPercentile(metric: string, percentile: number): number | null {
     const values = this.metrics.get(metric);
     if (!values || values.length === 0) return null;
-
     const sorted = [...values].sort((a, b) => a - b);
     const index = Math.ceil((percentile / 100) * sorted.length) - 1;
     return sorted[index];
   }
 }
-
 const metrics = new MetricsCollector();
-
 log("INFO", "[INIT] AI Chat Router Initializing.");
-
 // ═══════════════════════════════════════════════════════════════════════════
 // CIRCUIT BREAKER PATTERN
 // ═══════════════════════════════════════════════════════════════════════════
-
 enum CircuitState {
   CLOSED = "CLOSED",
   OPEN = "OPEN",
   HALF_OPEN = "HALF_OPEN",
 }
-
 class CircuitBreaker {
   private state: CircuitState = CircuitState.CLOSED;
   private failureCount = 0;
   private lastFailureTime = 0;
   private successCount = 0;
-
   constructor(
     private threshold: number,
     private timeout: number,
     private recoverySuccesses: number,
     private name: string,
   ) {}
-
   async execute<T>(operation: () => Promise<T>): Promise<T> {
     if (!env.ENABLE_CIRCUIT_BREAKER) {
       return operation();
     }
-
     if (this.state === CircuitState.OPEN) {
       if (Date.now() - this.lastFailureTime >= this.timeout) {
         log("INFO", `[CIRCUIT-BREAKER] Transitioning to HALF_OPEN, attempting recovery.`, { circuit: this.name });
@@ -356,7 +304,6 @@ class CircuitBreaker {
         throw new CircuitBreakerError(this.name);
       }
     }
-
     try {
       const result = await operation();
       this.onSuccess();
@@ -368,10 +315,8 @@ class CircuitBreaker {
       throw error;
     }
   }
-
   private onSuccess() {
     this.failureCount = 0;
-
     if (this.state === CircuitState.HALF_OPEN) {
       this.successCount++;
       if (this.successCount >= this.recoverySuccesses) {
@@ -380,11 +325,9 @@ class CircuitBreaker {
       }
     }
   }
-
   private onFailure() {
     this.failureCount++;
     this.lastFailureTime = Date.now();
-
     if (this.state === CircuitState.HALF_OPEN || this.failureCount >= this.threshold) {
       log("ERROR", `[CIRCUIT-BREAKER] Opening circuit (Service Failure Detected).`, {
         circuit: this.name,
@@ -394,7 +337,6 @@ class CircuitBreaker {
       this.state = CircuitState.OPEN;
     }
   }
-
   getState(): CircuitState {
     if (this.state === CircuitState.OPEN && Date.now() - this.lastFailureTime >= this.timeout) {
       return CircuitState.HALF_OPEN;
@@ -402,7 +344,6 @@ class CircuitBreaker {
     return this.state;
   }
 }
-
 const circuitBreakers = {
   anthropic: new CircuitBreaker(
     CONFIG.CIRCUIT_BREAKER_THRESHOLD,
@@ -423,38 +364,28 @@ const circuitBreakers = {
     "gemini",
   ),
 };
-
 // ═══════════════════════════════════════════════════════════════════════════
 // RATE LIMITING
 // ═══════════════════════════════════════════════════════════════════════════
-
 class RateLimiter {
   private requests: Map<string, number[]> = new Map();
-
   async checkLimit(userId: string): Promise<void> {
     if (!env.ENABLE_RATE_LIMITING) return;
-
     const now = Date.now();
     const windowStart = now - CONFIG.RATE_LIMIT_WINDOW_MS;
-
     let userRequests = this.requests.get(userId) || [];
-
     userRequests = userRequests.filter((timestamp) => timestamp > windowStart);
-
     if (userRequests.length >= CONFIG.RATE_LIMIT_MAX_REQUESTS) {
       throw new RateLimitError(
         `Rate limit exceeded: ${CONFIG.RATE_LIMIT_MAX_REQUESTS} requests per ${CONFIG.RATE_LIMIT_WINDOW_MS / 1000}s`,
       );
     }
-
     userRequests.push(now);
     this.requests.set(userId, userRequests);
-
     if (Math.random() < 0.01) {
       this.cleanup(windowStart);
     }
   }
-
   private cleanup(windowStart: number) {
     for (const [userId, requests] of this.requests.entries()) {
       const activeRequests = requests.filter((ts) => ts > windowStart);
@@ -465,7 +396,6 @@ class RateLimiter {
       }
     }
   }
-
   getRemainingRequests(userId: string): number {
     const now = Date.now();
     const windowStart = now - CONFIG.RATE_LIMIT_WINDOW_MS;
@@ -474,21 +404,16 @@ class RateLimiter {
     return Math.max(0, CONFIG.RATE_LIMIT_MAX_REQUESTS - activeRequests.length);
   }
 }
-
 const rateLimiter = new RateLimiter();
-
 // ═══════════════════════════════════════════════════════════════════════════
 // REQUEST DEDUPLICATION
 // ═══════════════════════════════════════════════════════════════════════════
-
 interface PendingRequest {
   promise: Promise<Response>;
   timestamp: number;
 }
-
 class RequestDeduplicator {
   private pending: Map<string, PendingRequest> = new Map();
-
   async createKey(userId: string, body: RequestBody): Promise<string> {
     const payload = JSON.stringify({ userId, messages: body.messages, imageIds: body.imageIds || [] });
     const msgBuffer = encoder.encode(payload);
@@ -496,14 +421,11 @@ class RequestDeduplicator {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   }
-
   async deduplicate(key: string, operation: () => Promise<Response>): Promise<Response> {
     if (!env.ENABLE_REQUEST_DEDUPLICATION) {
       return operation();
     }
-
     const now = Date.now();
-
     const existing = this.pending.get(key);
     if (existing && now - existing.timestamp < CONFIG.DEDUP_WINDOW_MS) {
       log("INFO", "[DEDUP] Returning cached pending request (Request In-Flight)", {
@@ -511,20 +433,16 @@ class RequestDeduplicator {
       });
       return existing.promise;
     }
-
     const promise = operation();
     this.pending.set(key, { promise, timestamp: now });
-
     promise.finally(() => {
       const entry = this.pending.get(key);
       if (entry && entry.timestamp === now) {
         this.pending.delete(key);
       }
     });
-
     return promise;
   }
-
   cleanup() {
     const now = Date.now();
     const cutoff = now - (CONFIG.STREAM_TOTAL_TIMEOUT_MS + 5000);
@@ -540,49 +458,36 @@ class RequestDeduplicator {
     }
   }
 }
-
 const deduplicator = new RequestDeduplicator();
-
 setInterval(() => deduplicator.cleanup(), 60000);
-
 // ═══════════════════════════════════════════════════════════════════════════
 // ADAPTIVE TIMEOUT CALCULATOR
 // ═══════════════════════════════════════════════════════════════════════════
-
 class AdaptiveTimeout {
   getConnectionTimeout(provider: string): number {
     const p95 = metrics.getPercentile(`${provider}_connection_time`, 95);
     if (!p95) return CONFIG.API_CONNECT_TIMEOUT_MS;
-
     return Math.max(CONFIG.API_CONNECT_TIMEOUT_MS, p95 * 1.5);
   }
-
   getStreamInactivityTimeout(provider: string): number {
     const p95 = metrics.getPercentile(`${provider}_ttft`, 95);
     if (!p95) return CONFIG.STREAM_INACTIVITY_TIMEOUT_MS;
-
     return Math.max(CONFIG.STREAM_INACTIVITY_TIMEOUT_MS, p95 * 2);
   }
 }
-
 const adaptiveTimeout = new AdaptiveTimeout();
-
 // ═══════════════════════════════════════════════════════════════════════════
 // AUTHENTICATION
 // ═══════════════════════════════════════════════════════════════════════════
-
 async function authenticateUser(token: string, ctx: RequestContext): Promise<{ id: string; email?: string }> {
   const startTime = performance.now();
-
   try {
     log("DEBUG", "[AUTH] Attempting authentication", { ctx });
     const { data, error } = await supabaseAdmin.auth.getUser(token);
-
     if (error || !data.user) {
       log("WARN", "[AUTH] Invalid or expired token", { ctx, error: error?.message });
       throw new AuthError("Invalid or expired token", "AUTH_INVALID_TOKEN", 401);
     }
-
     metrics.record("auth_duration", performance.now() - startTime);
     log("DEBUG", "[AUTH] Authentication successful", { ctx, userId: data.user.id });
     return { id: data.user.id, email: data.user.email };
@@ -595,19 +500,15 @@ async function authenticateUser(token: string, ctx: RequestContext): Promise<{ i
     throw error;
   }
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // ROUTING CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════
-
 type Provider = "anthropic" | "openai" | "gemini";
-
 interface UsageMetrics {
   inputTokens: number;
   outputTokens: number;
   totalCost?: number;
 }
-
 interface RouteProfile {
   provider: Provider;
   model: string;
@@ -620,7 +521,6 @@ interface RouteProfile {
   costPer1kInput: number;
   costPer1kOutput: number;
 }
-
 const ROUTER_CONFIG: Record<string, RouteProfile> = {
   anthropic: {
     provider: "anthropic",
@@ -659,10 +559,8 @@ const ROUTER_CONFIG: Record<string, RouteProfile> = {
     costPer1kOutput: 0.005,
   },
 };
-
 const PREFERRED_MODEL_KEY = "gemini";
 const FALLBACK_MODEL_KEY = "anthropic";
-
 const CODE_WORDS = new Set([
   "code",
   "function",
@@ -678,7 +576,6 @@ const CODE_WORDS = new Set([
   "python",
   "refactor",
 ]);
-
 function decideRoute(
   messages: ChatMessage[],
   imageCount: number,
@@ -687,14 +584,12 @@ function decideRoute(
 ): { taskType: string; profile: RouteProfile; reasoning: string } {
   const lastMessage = messages[messages.length - 1];
   const userText = lastMessage.content.toLowerCase();
-
   log("DEBUG", "[ROUTER] Starting routing decision", {
     ctx,
     imageCount,
     messageLength: userText.length,
     userPreferredProvider,
   });
-
   const selectHealthyProfile = (keys: string[]): RouteProfile | undefined => {
     for (const key of keys) {
       const profile = ROUTER_CONFIG[key];
@@ -716,10 +611,8 @@ function decideRoute(
     }
     return undefined;
   };
-
   let taskType = "general";
   let preferredKeys: string[] = [PREFERRED_MODEL_KEY, FALLBACK_MODEL_KEY];
-
   if (userPreferredProvider && userPreferredProvider !== "auto") {
     taskType = "user_preference";
     preferredKeys = [userPreferredProvider, PREFERRED_MODEL_KEY, FALLBACK_MODEL_KEY];
@@ -734,10 +627,8 @@ function decideRoute(
       preferredKeys = ["anthropic", "openai", "gemini"];
     }
   }
-
   let profile = selectHealthyProfile(preferredKeys);
   let reasoning = `Task type: ${taskType}. Preferred models considered: [${preferredKeys.join(", ")}].`;
-
   if (!profile) {
     log("WARN", `[ROUTER] All preferred providers unavailable for task ${taskType}. Attempting global fallback.`, {
       ctx,
@@ -746,7 +637,6 @@ function decideRoute(
     profile = selectHealthyProfile(allKeys);
     reasoning += " Fallback required due to preferred model unavailability.";
   }
-
   if (!profile) {
     log("ERROR", "[ROUTER] Service Unavailable: No AI providers available.", { ctx });
     throw new AppError(
@@ -756,16 +646,12 @@ function decideRoute(
       false,
     );
   }
-
   reasoning += ` Routed to ${profile.provider} (${profile.model}).`;
-
   return { taskType, profile, reasoning };
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // RESILIENCE UTILITIES
 // ═══════════════════════════════════════════════════════════════════════════
-
 async function retryOperation<T>(
   operation: () => Promise<T>,
   shouldRetry: (error: unknown) => boolean,
@@ -774,7 +660,6 @@ async function retryOperation<T>(
 ): Promise<T> {
   let attempt = 0;
   let lastError: unknown;
-
   while (attempt < maxRetries) {
     attempt++;
     log("DEBUG", "[RETRY] Attempt starting", { ctx, attempt, maxRetries });
@@ -783,7 +668,6 @@ async function retryOperation<T>(
     } catch (error) {
       lastError = error;
       const isRetryable = shouldRetry(error);
-
       if (!isRetryable) {
         log("INFO", "[RETRY] Operation failed permanently (non-retryable error).", {
           attempt,
@@ -792,10 +676,8 @@ async function retryOperation<T>(
         });
         throw error;
       }
-
       const baseDelay = Math.pow(2, attempt - 1) * CONFIG.RETRY_BASE_DELAY_MS;
       const delay = Math.max(CONFIG.RETRY_MIN_JITTER_DELAY_MS, Math.random() * baseDelay);
-
       log("WARN", "[RETRY] Operation failed (transient), retrying...", {
         attempt,
         maxRetries,
@@ -803,11 +685,9 @@ async function retryOperation<T>(
         error,
         ctx,
       });
-
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
-
   log("ERROR", "[RETRY] Max retries exceeded.", {
     attempt,
     error: lastError,
@@ -815,21 +695,17 @@ async function retryOperation<T>(
   });
   throw lastError;
 }
-
 const shouldRetryApiCall = (error: unknown): boolean => {
   if (error instanceof AppError) {
     return error.retryable;
   }
   return error instanceof TypeError;
 };
-
 // ═══════════════════════════════════════════════════════════════════════════
 // STREAM PROCESSING
 // ═══════════════════════════════════════════════════════════════════════════
-
 type StreamParserResult = { chunk: string | null; usage: Partial<UsageMetrics> | null };
 type StreamParser = (data: string) => StreamParserResult;
-
 function createSSEParser(
   parser: StreamParser,
   provider: Provider,
@@ -838,33 +714,26 @@ function createSSEParser(
   const decoder = new TextDecoder();
   let buffer = "";
   const metrics: UsageMetrics = { inputTokens: 0, outputTokens: 0 };
-
   let resolveUsage: (value: UsageMetrics) => void;
   const usagePromise = new Promise<UsageMetrics>((resolve) => {
     resolveUsage = resolve;
   });
-
   const transformer = new TransformStream<Uint8Array, string>({
     transform(chunk, controller) {
       buffer += decoder.decode(chunk, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
-
       for (const line of lines) {
         if (!line.trim() || !line.startsWith("data: ")) continue;
-
         const data = line.slice(6).trim();
         if (data === "[DONE]") continue;
-
         log("TRACE", "[STREAM-IO] Raw SSE data received", {
           ctx,
           provider,
           rawData: data.substring(0, CONFIG.MAX_TRACE_LOG_LENGTH),
         });
-
         try {
           const result = parser(data);
-
           if (result.usage) {
             if (result.usage.inputTokens !== undefined) {
               metrics.inputTokens = result.usage.inputTokens;
@@ -873,7 +742,6 @@ function createSSEParser(
               metrics.outputTokens += result.usage.outputTokens;
             }
           }
-
           if (result.chunk) {
             controller.enqueue(result.chunk);
           }
@@ -893,14 +761,11 @@ function createSSEParser(
       resolveUsage(metrics);
     },
   });
-
   return { transformer, usagePromise };
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // API INTEGRATIONS
 // ═══════════════════════════════════════════════════════════════════════════
-
 async function callProviderAPI(
   profile: RouteProfile,
   payload: unknown,
@@ -909,39 +774,31 @@ async function callProviderAPI(
   ctx: RequestContext,
 ): Promise<{ stream: ReadableStream<string>; usagePromise: Promise<UsageMetrics> }> {
   const { provider, model, limits } = profile;
-
   log("DEBUG", "[API] Preparing to call provider API", {
     ctx,
     provider,
     model,
   });
-
   return retryOperation(
     async () => {
       return circuitBreakers[provider].execute(async () => {
         let response: Response;
         let parser: StreamParser;
-
         const connectionStart = performance.now();
-
         const timeoutController = new AbortController();
         const connectionTimeout = adaptiveTimeout.getConnectionTimeout(provider);
         const timeoutError = new TimeoutError(
           `API connection timed out after ${connectionTimeout}ms`,
           "CONNECTION_TIMEOUT",
         );
-
         const timeoutId = setTimeout(() => {
           timeoutController.abort(timeoutError);
         }, connectionTimeout);
-
         const compositeSignal = AbortSignal.any([clientSignal, timeoutController.signal]);
-
         try {
           switch (provider) {
             case "anthropic": {
               if (!env.ANTHROPIC_API_KEY) throw new AppError("Anthropic API Key Missing", 500, "CONFIG_ERROR", false);
-
               const requestBody = JSON.stringify({
                 model,
                 max_tokens: limits.maxOutputTokens,
@@ -949,14 +806,12 @@ async function callProviderAPI(
                 stream: true,
                 system: systemPrompt,
               });
-
               log("TRACE", "[API-IO] Sending Anthropic request payload", {
                 ctx,
                 requestBody:
                   requestBody.substring(0, CONFIG.MAX_TRACE_LOG_LENGTH) +
                   (requestBody.length > CONFIG.MAX_TRACE_LOG_LENGTH ? "... [TRUNCATED]" : ""),
               });
-
               response = await fetch("https://api.anthropic.com/v1/messages", {
                 method: "POST",
                 headers: {
@@ -968,12 +823,10 @@ async function callProviderAPI(
                 body: requestBody,
                 signal: compositeSignal,
               });
-
               parser = (data: string): StreamParserResult => {
                 const parsed = JSON.parse(data);
                 let chunk: string | null = null;
                 let usage: Partial<UsageMetrics> | null = null;
-
                 if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
                   chunk = parsed.delta.text;
                 } else if (parsed.type === "message_delta" && parsed.delta?.usage) {
@@ -987,15 +840,12 @@ async function callProviderAPI(
                 } else if (parsed.type === "error") {
                   throw new Error(`Anthropic Stream Error: ${parsed.error?.message}`);
                 }
-
                 return { chunk, usage };
               };
               break;
             }
-
             case "openai": {
               if (!env.OPENAI_API_KEY) throw new AppError("OpenAI API Key Missing", 500, "CONFIG_ERROR", false);
-
               const requestBody = JSON.stringify({
                 model,
                 messages: payload,
@@ -1003,14 +853,12 @@ async function callProviderAPI(
                 max_tokens: limits.maxOutputTokens,
                 stream_options: { include_usage: true },
               });
-
               log("TRACE", "[API-IO] Sending OpenAI request payload", {
                 ctx,
                 requestBody:
                   requestBody.substring(0, CONFIG.MAX_TRACE_LOG_LENGTH) +
                   (requestBody.length > CONFIG.MAX_TRACE_LOG_LENGTH ? "... [TRUNCATED]" : ""),
               });
-
               response = await fetch("https://api.openai.com/v1/chat/completions", {
                 method: "POST",
                 headers: {
@@ -1021,51 +869,40 @@ async function callProviderAPI(
                 body: requestBody,
                 signal: compositeSignal,
               });
-
               parser = (data: string): StreamParserResult => {
                 const parsed = JSON.parse(data);
                 let chunk: string | null = null;
                 let usage: Partial<UsageMetrics> | null = null;
-
                 if (parsed?.choices?.[0]?.delta?.content) {
                   chunk = parsed.choices[0].delta.content;
                 }
-
                 if (parsed.usage) {
                   usage = {
                     inputTokens: parsed.usage.prompt_tokens || 0,
                     outputTokens: parsed.usage.completion_tokens || 0,
                   };
                 }
-
                 return { chunk, usage };
               };
               break;
             }
-
             case "gemini": {
               if (!env.GEMINI_API_KEY) throw new AppError("Gemini API Key Missing", 500, "CONFIG_ERROR", false);
-
               const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${env.GEMINI_API_KEY}&alt=sse`;
-
               const geminiBody: Record<string, unknown> = {
                 contents: payload,
                 generationConfig: { maxOutputTokens: limits.maxOutputTokens },
               };
-
               if (systemPrompt) {
                 geminiBody.systemInstruction = { parts: [{ text: systemPrompt }] };
               }
-
               const requestBody = JSON.stringify(geminiBody);
-
               log("TRACE", "[API-IO] Sending Gemini request payload", {
                 ctx,
                 requestBody:
                   requestBody.substring(0, CONFIG.MAX_TRACE_LOG_LENGTH) +
                   (requestBody.length > CONFIG.MAX_TRACE_LOG_LENGTH ? "... [TRUNCATED]" : ""),
               });
-
               response = await fetch(url, {
                 method: "POST",
                 headers: {
@@ -1075,35 +912,28 @@ async function callProviderAPI(
                 body: requestBody,
                 signal: compositeSignal,
               });
-
               parser = (data: string): StreamParserResult => {
                 const parsed = JSON.parse(data);
                 let chunk: string | null = null;
                 let usage: Partial<UsageMetrics> | null = null;
-
                 const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
                 if (text) chunk = text;
-
                 if (parsed.usageMetadata) {
                   usage = {
                     inputTokens: parsed.usageMetadata.promptTokenCount || 0,
                     outputTokens: parsed.usageMetadata.candidatesTokenCount || 0,
                   };
                 }
-
                 if (parsed?.promptFeedback?.blockReason) {
                   throw new Error(`Gemini blocked: ${parsed.promptFeedback.blockReason}`);
                 }
-
                 if (parsed?.candidates?.[0]?.finishReason === "SAFETY") {
                   throw new Error("Response stopped due to safety concerns.");
                 }
-
                 return { chunk, usage };
               };
               break;
             }
-
             default:
               throw new Error(`Unsupported provider: ${provider}`);
           }
@@ -1121,13 +951,11 @@ async function callProviderAPI(
           clearTimeout(timeoutId);
           metrics.record(`${provider}_connection_time`, performance.now() - connectionStart);
         }
-
         if (!response.ok) {
           const headers: Record<string, string> = {};
           response.headers.forEach((value, key) => {
             headers[key] = value;
           });
-
           const errorText = await response.text().catch(() => "Failed to read upstream error body");
           log("ERROR", "[API] Upstream API returned non-OK status", {
             ctx,
@@ -1138,14 +966,11 @@ async function callProviderAPI(
           });
           throw new ProviderError(provider, response.status, errorText);
         }
-
         if (!response.body) {
           throw new ProviderError(provider, 500, "No response body received from upstream.");
         }
-
         const { transformer, usagePromise } = createSSEParser(parser, provider, ctx);
         const stream = response.body.pipeThrough(transformer);
-
         return { stream, usagePromise };
       });
     },
@@ -1154,11 +979,9 @@ async function callProviderAPI(
     ctx,
   );
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // DATA FETCHING & UTILITIES
 // ═══════════════════════════════════════════════════════════════════════════
-
 function sendSSE(
   controller: ReadableStreamDefaultController,
   eventType: string,
@@ -1171,7 +994,6 @@ function sendSSE(
     log("DEBUG", "[SSE] Failed to send SSE event (controller likely closed).");
   }
 }
-
 function sendDebugEvent(
   controller: ReadableStreamDefaultController,
   ctx: RequestContext,
@@ -1179,38 +1001,30 @@ function sendDebugEvent(
   details: Record<string, unknown>,
 ) {
   if (!ctx.enableClientDebug) return;
-
   log("DEBUG", `[DEBUG-EVENT] Sending client debug event for stage: ${stage}`, { ctx });
-
   sendSSE(controller, "debug", {
     timestamp: new Date().toISOString(),
     stage,
     details,
   });
 }
-
 async function getDomainContext(userId: string, ctx: RequestContext): Promise<string | null> {
   // Domain context disabled - not needed for this app
   return null;
 }
-
 const VALID_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-
 async function fetchAndEncodeImages(
   imageIds: string[],
   userId: string,
   ctx: RequestContext,
 ): Promise<Array<{ media_type: string; data: string }>> {
   if (!imageIds || imageIds.length === 0) return [];
-
   log("DEBUG", "[IMAGES] Fetching and validating images", { ctx, imageIds });
-
   const { data: imageRecords, error } = await supabaseAdmin
     .from("uploaded_images")
     .select("id, mime_type, storage_path, size")
     .in("id", imageIds)
     .eq("user_id", userId);
-
   if (error || !imageRecords || imageRecords.length !== imageIds.length) {
     log("ERROR", "[IMAGES] Failed to fetch image records or unauthorized access attempt", {
       error,
@@ -1220,36 +1034,28 @@ async function fetchAndEncodeImages(
     });
     return [];
   }
-
   log("DEBUG", "[IMAGES] Image metadata fetched and ownership validated.", { ctx, count: imageRecords.length });
-
   const downloadPromises = imageRecords.map(async (record) => {
     if (!record.storage_path || !record.mime_type) return null;
-
     if (!VALID_MIME_TYPES.has(record.mime_type)) {
       log("WARN", "[IMAGES] Unsupported MIME type", { mime: record.mime_type, id: record.id, ctx });
       return null;
     }
-
     if (record.size && record.size > CONFIG.MAX_IMAGE_SIZE_BYTES) {
       log("WARN", "[IMAGES] Image exceeds size limit (metadata)", { size: record.size, id: record.id, ctx });
       return null;
     }
-
     const { data: fileData, error: downloadError } = await supabaseAdmin.storage
       .from(CONFIG.IMAGE_BUCKET_NAME)
       .download(record.storage_path);
-
     if (downloadError || !fileData) {
       log("ERROR", `[IMAGES] Failed to download image`, { id: record.id, error: downloadError, ctx });
       return null;
     }
-
     if (fileData.size > CONFIG.MAX_IMAGE_SIZE_BYTES) {
       log("WARN", "[IMAGES] Downloaded image exceeds size limit", { size: fileData.size, id: record.id, ctx });
       return null;
     }
-
     try {
       const arrayBuffer = await fileData.arrayBuffer();
       const base64 = encodeBase64(arrayBuffer);
@@ -1259,15 +1065,12 @@ async function fetchAndEncodeImages(
       return null;
     }
   });
-
   const results = await Promise.all(downloadPromises);
   return results.filter((r): r is { media_type: string; data: string } => r !== null);
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // MESSAGE FORMATTING
 // ═══════════════════════════════════════════════════════════════════════════
-
 function formatMessagesForProvider(
   provider: Provider,
   messages: ChatMessage[],
@@ -1280,18 +1083,14 @@ function formatMessagesForProvider(
     }
     return true;
   });
-
   if (provider === "openai" && systemPrompt && !messages.some((m) => m.role === "system")) {
     filteredMessages.unshift({ role: "system", content: systemPrompt });
   }
-
   return filteredMessages.map((msg: ChatMessage, idx: number) => {
     const isLastMessage = idx === filteredMessages.length - 1;
     const role = provider === "gemini" ? (msg.role === "assistant" ? "model" : msg.role) : msg.role;
-
     if (msg.role === "user" && isLastMessage && images.length > 0) {
       const contentArray: Array<Record<string, unknown>> = [];
-
       if (msg.content) {
         if (provider === "gemini") {
           contentArray.push({ text: msg.content });
@@ -1299,7 +1098,6 @@ function formatMessagesForProvider(
           contentArray.push({ type: "text", text: msg.content });
         }
       }
-
       images.forEach((img) => {
         if (provider === "anthropic") {
           contentArray.push({
@@ -1317,21 +1115,17 @@ function formatMessagesForProvider(
           });
         }
       });
-
       return provider === "gemini" ? { role, parts: contentArray } : { role, content: contentArray };
     }
-
     if (provider === "gemini") {
       return { role, parts: [{ text: msg.content }] };
     }
     return { role, content: msg.content };
   });
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // DATABASE PERSISTENCE
 // ═══════════════════════════════════════════════════════════════════════════
-
 function persistMessage(requestId: string, messageData: Record<string, unknown>, ctx?: RequestContext) {
   log("DEBUG", "[DB-ASYNC] Attempting to persist message", { ctx, requestId });
   supabaseAdmin
@@ -1345,30 +1139,23 @@ function persistMessage(requestId: string, messageData: Record<string, unknown>,
       }
     });
 }
-
 function calculateCost(usage: UsageMetrics, profile: RouteProfile): number {
   const inputCost = (usage.inputTokens / 1000) * profile.costPer1kInput;
   const outputCost = (usage.outputTokens / 1000) * profile.costPer1kOutput;
   return inputCost + outputCost;
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // HEALTH CHECK ENDPOINT
 // ═══════════════════════════════════════════════════════════════════════════
-
 function handleHealthCheck(headers: Record<string, string>): Response {
   log("INFO", "[HEALTH] Health check initiated.");
-
   const providerStatus = Object.entries(circuitBreakers).map(([name, breaker]) => ({
     name,
     state: breaker.getState(),
     enabled: Object.values(ROUTER_CONFIG).some((p) => p.provider === (name as Provider) && p.enabled),
   }));
-
   const allHealthy = providerStatus.every((p) => p.state === CircuitState.CLOSED || !p.enabled);
-
   const status = allHealthy ? 200 : 503;
-
   const responseBody = {
     status: allHealthy ? "OK" : "DEGRADED",
     timestamp: new Date().toISOString(),
@@ -1379,7 +1166,6 @@ function handleHealthCheck(headers: Record<string, string>): Response {
       providers: providerStatus,
     },
   };
-
   return new Response(JSON.stringify(responseBody, null, 2), {
     status,
     headers: {
@@ -1389,30 +1175,23 @@ function handleHealthCheck(headers: Record<string, string>): Response {
     },
   });
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN HANDLER
 // ═══════════════════════════════════════════════════════════════════════════
-
 Deno.serve(async (req: Request) => {
   const requestStartTime = performance.now();
   const url = new URL(req.url);
-
   const responseHeaders: Record<string, string> = {
     ...corsHeaders,
     ...SECURITY_HEADERS,
   };
-
   if (req.method === "GET" && url.pathname === "/health") {
     return handleHealthCheck(responseHeaders);
   }
-
   const ctx = initializeRequestContext(req);
   const { requestId, trace } = ctx;
-
   responseHeaders["X-Request-ID"] = requestId;
   responseHeaders["X-Trace-ID"] = trace.traceId;
-
   const requestController = new AbortController();
   req.signal.addEventListener(
     "abort",
@@ -1422,51 +1201,42 @@ Deno.serve(async (req: Request) => {
     },
     { once: true },
   );
-
   log("INFO", "[REQUEST] Incoming", {
     method: req.method,
     path: url.pathname,
     ctx,
   });
-
   if (ctx.enableClientDebug) {
     responseHeaders["X-Debug-Mode-Active"] = "true";
   }
-
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: responseHeaders, status: 204 });
   }
-
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       throw new AuthError("Authorization header missing or malformed", "AUTH_HEADER_INVALID", 401);
     }
     const token = authHeader.substring(7);
-
     const authPromise = authenticateUser(token, ctx);
     const bodyPromise = req.json().catch(() => {
       throw new ValidationError("Invalid JSON payload or content type mismatch");
     });
-
     const [user, rawBody] = await Promise.all([authPromise, bodyPromise]);
     ctx.userId = user.id;
-
     log("DEBUG", "[REQUEST] Body parsed and user authenticated", {
       ctx,
       rawBodySize: JSON.stringify(rawBody).length,
       rawBodyKeys: Object.keys(rawBody),
       rawBodyPreview: JSON.stringify(rawBody).substring(0, 500),
     });
-
     await rateLimiter.checkLimit(user.id);
     responseHeaders["X-RateLimit-Remaining"] = rateLimiter.getRemainingRequests(user.id).toString();
     responseHeaders["X-RateLimit-Limit"] = CONFIG.RATE_LIMIT_MAX_REQUESTS.toString();
-
     const validationResult = RequestBodySchema.safeParse(rawBody);
     if (!validationResult.success) {
-      log("WARN", "[VALIDATION] Request validation failed", { 
-        ctx, 
+      log("WARN", "[VALIDATION] Request validation failed", {
+        ctx,
         errors: validationResult.error.format(),
         receivedKeys: Object.keys(rawBody),
         receivedBody: JSON.stringify(rawBody).substring(0, 1000),
@@ -1475,12 +1245,10 @@ Deno.serve(async (req: Request) => {
     }
     const requestData = validationResult.data;
     const { messages, conversationId, imageIds, mode, preferredProvider } = requestData;
-
     const lastUserMessage = messages[messages.length - 1];
     if (lastUserMessage.role !== "user") {
       throw new ValidationError("Last message must be from the user role.");
     }
-
     const searchTriggers = [/^search[: ]/i, /^find[: ]/i, /what (is|are) the latest/i];
     if (mode === "search_assist" || searchTriggers.some((t) => t.test(lastUserMessage.content))) {
       log("INFO", "[ROUTER] Search query detected, delegating.", { ctx });
@@ -1494,13 +1262,10 @@ Deno.serve(async (req: Request) => {
         userToken: token,
       });
     }
-
     const dedupKey = await deduplicator.createKey(user.id, requestData);
     log("DEBUG", "[DEDUP] Deduplication key generated", { ctx, keyHash: dedupKey.substring(0, 15) + "..." });
-
     return await deduplicator.deduplicate(dedupKey, async () => {
       const dedupStartTime = performance.now();
-
       log("DEBUG", "[DATA] Starting parallel data fetching (Images and Context)", { ctx });
       const [images, domainContext] = await Promise.all([
         fetchAndEncodeImages(imageIds || [], user.id, ctx),
@@ -1511,10 +1276,8 @@ Deno.serve(async (req: Request) => {
         imagesCount: images.length,
         contextFound: !!domainContext,
       });
-
       const { taskType, profile, reasoning } = decideRoute(messages, images.length, ctx, preferredProvider);
       const { provider, model } = profile;
-
       log("INFO", "[ROUTER] Decision", {
         ctx,
         provider,
@@ -1522,10 +1285,8 @@ Deno.serve(async (req: Request) => {
         taskType,
         reasoning,
       });
-
       const systemPrompt = domainContext || "You are a helpful AI assistant.";
       const apiPayload = formatMessagesForProvider(provider, messages, images, systemPrompt);
-
       if (conversationId) {
         persistMessage(
           requestId,
@@ -1544,11 +1305,9 @@ Deno.serve(async (req: Request) => {
           ctx,
         );
       }
-
       const stream = new ReadableStream({
         async start(controller) {
           const streamControllerStartTime = performance.now();
-
           sendDebugEvent(controller, ctx, "INITIALIZATION", {
             requestId: ctx.requestId,
             traceId: ctx.trace.traceId,
@@ -1561,7 +1320,6 @@ Deno.serve(async (req: Request) => {
               deduplicationOverhead: streamControllerStartTime - dedupStartTime,
             },
           });
-
           sendDebugEvent(controller, ctx, "ROUTING", {
             taskType,
             provider,
@@ -1571,7 +1329,6 @@ Deno.serve(async (req: Request) => {
             imageCount: images.length,
             contextUsed: !!domainContext,
           });
-
           try {
             const sanitizedPayload = JSON.parse(JSON.stringify(apiPayload));
             if (Array.isArray(sanitizedPayload)) {
@@ -1590,7 +1347,6 @@ Deno.serve(async (req: Request) => {
                 }
               });
             }
-
             sendDebugEvent(controller, ctx, "PAYLOAD_PREVIEW", {
               systemPrompt: systemPrompt.substring(0, 500) + (systemPrompt.length > 500 ? "..." : ""),
               messages: sanitizedPayload,
@@ -1599,14 +1355,12 @@ Deno.serve(async (req: Request) => {
             log("WARN", "[DEBUG-EVENT] Failed to sanitize payload for preview", { ctx, error: e });
             sendDebugEvent(controller, ctx, "PAYLOAD_PREVIEW", { error: "Failed to sanitize payload for preview." });
           }
-
           let ttftMs = 0;
           let firstChunkReceived = false;
           let assistantResponseText = "";
           let finalUsage: UsageMetrics = { inputTokens: 0, outputTokens: 0 };
           let upstreamReader: ReadableStreamDefaultReader<string> | null = null;
           let apiCallError: unknown = null;
-
           try {
             sendSSE(controller, "metadata", {
               provider,
@@ -1616,7 +1370,6 @@ Deno.serve(async (req: Request) => {
               requestId,
               traceId: trace.traceId,
             });
-
             const apiCallStartTime = performance.now();
             const { stream: apiStream, usagePromise } = await callProviderAPI(
               profile,
@@ -1626,7 +1379,6 @@ Deno.serve(async (req: Request) => {
               ctx,
             );
             const apiConnectionTime = performance.now() - apiCallStartTime;
-
             sendDebugEvent(controller, ctx, "API_CONNECTION", {
               status: "Connected",
               connectionTimeMs: apiConnectionTime,
@@ -1635,12 +1387,9 @@ Deno.serve(async (req: Request) => {
                 inactivity: adaptiveTimeout.getStreamInactivityTimeout(provider),
               },
             });
-
             upstreamReader = apiStream.getReader();
-
             const streamStartTime = performance.now();
             const streamInactivityTimeout = adaptiveTimeout.getStreamInactivityTimeout(provider);
-
             while (true) {
               const timeoutPromise = new Promise<never>((_, reject) =>
                 setTimeout(
@@ -1648,7 +1397,6 @@ Deno.serve(async (req: Request) => {
                   streamInactivityTimeout,
                 ),
               );
-
               const abortPromise = new Promise<never>((_, reject) => {
                 if (requestController.signal.aborted) {
                   reject(new AppError("Client disconnected", 499, "CLIENT_DISCONNECTED", false));
@@ -1662,10 +1410,8 @@ Deno.serve(async (req: Request) => {
                   { once: true },
                 );
               });
-
               const readPromise = upstreamReader.read();
               let result: ReadableStreamReadResult<string>;
-
               try {
                 result = (await Promise.race([
                   readPromise,
@@ -1681,12 +1427,9 @@ Deno.serve(async (req: Request) => {
                 upstreamReader.cancel().catch(() => {});
                 throw error;
               }
-
               const { done, value: chunk } = result;
               if (done) break;
-
               assistantResponseText += chunk;
-
               if (!firstChunkReceived) {
                 firstChunkReceived = true;
                 ttftMs = performance.now() - requestStartTime;
@@ -1696,34 +1439,28 @@ Deno.serve(async (req: Request) => {
                   ttftMs: Math.round(ttftMs),
                   provider,
                 });
-
                 sendDebugEvent(controller, ctx, "TTFT", {
                   ttftMs: Math.round(ttftMs),
                   timeSinceConnection: performance.now() - streamStartTime,
                 });
               }
-
               sendSSE(controller, "text", chunk);
-
               if (performance.now() - streamStartTime > CONFIG.STREAM_TOTAL_TIMEOUT_MS) {
                 log("ERROR", "[STREAM] Total timeout exceeded", { ctx, provider });
                 upstreamReader.cancel().catch(() => {});
                 throw new TimeoutError("Stream exceeded maximum duration", "STREAM_TOTAL_TIMEOUT");
               }
             }
-
             try {
               const usage = await usagePromise;
               if (usage.inputTokens > 0 || usage.outputTokens > 0) {
                 finalUsage = usage;
                 finalUsage.totalCost = calculateCost(usage, profile);
-
                 log("INFO", "[USAGE] Metrics", {
                   ctx,
                   provider,
                   ...finalUsage,
                 });
-
                 metrics.record(`${provider}_input_tokens`, usage.inputTokens);
                 metrics.record(`${provider}_output_tokens`, usage.outputTokens);
                 metrics.record(`${provider}_total_cost`, finalUsage.totalCost);
@@ -1731,21 +1468,18 @@ Deno.serve(async (req: Request) => {
             } catch (e) {
               log("WARN", "[USAGE] Failed to collect metrics", { ctx, provider, error: e });
             }
-
             sendSSE(controller, "done", {
               status: "success",
               usage: finalUsage,
             });
           } catch (error) {
             apiCallError = error;
-
             if (!(error instanceof AppError && error.code === "CLIENT_DISCONNECTED")) {
               log("ERROR", "[STREAM] Critical error during streaming", {
                 ctx,
                 provider,
                 error,
               });
-
               const errorType =
                 error instanceof TimeoutError
                   ? "timeout"
@@ -1754,9 +1488,7 @@ Deno.serve(async (req: Request) => {
                     : error instanceof CircuitBreakerError
                       ? "circuit_breaker"
                       : "internal_error";
-
               const code = error instanceof AppError ? error.code : "UNKNOWN_STREAM_ERROR";
-
               sendSSE(controller, "error", {
                 errorType,
                 code,
@@ -1765,7 +1497,6 @@ Deno.serve(async (req: Request) => {
             }
           } finally {
             const durationMs = performance.now() - requestStartTime;
-
             const errorDetails = apiCallError
               ? {
                   name: (apiCallError as Error).name || "N/A",
@@ -1774,7 +1505,6 @@ Deno.serve(async (req: Request) => {
                   status: apiCallError instanceof AppError ? apiCallError.status : "N/A",
                 }
               : null;
-
             sendDebugEvent(controller, ctx, "REQUEST_SUMMARY", {
               status: apiCallError ? "Failed" : "Success",
               totalDurationMs: Math.round(durationMs),
@@ -1785,11 +1515,9 @@ Deno.serve(async (req: Request) => {
               responseTextLength: assistantResponseText.length,
               errorDetails: errorDetails,
             });
-
             try {
               controller.close();
             } catch (e) {}
-
             if (assistantResponseText.trim() && conversationId) {
               persistMessage(
                 requestId,
@@ -1814,7 +1542,6 @@ Deno.serve(async (req: Request) => {
                 ctx,
               );
             }
-
             metrics.record("request_duration", durationMs);
             log("INFO", "[REQUEST] Completed", {
               ctx,
@@ -1824,7 +1551,6 @@ Deno.serve(async (req: Request) => {
           }
         },
       });
-
       return new Response(stream, {
         status: 200,
         headers: {
@@ -1837,19 +1563,16 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     const finalCtx = ctx || initializeRequestContext(req);
-
     if (!(error instanceof AppError && error.code === "CLIENT_DISCONNECTED")) {
       log("ERROR", "[REQUEST] Failed (Synchronous Error)", {
         ctx: finalCtx,
         error,
       });
     }
-
     let status = 500;
     let message = "Internal Server Error";
     let details = undefined;
     let code = "UNKNOWN_SYNC_ERROR";
-
     if (error instanceof AppError) {
       status = error.status;
       message = error.message;
@@ -1858,7 +1581,6 @@ Deno.serve(async (req: Request) => {
         details = error.details;
       }
     }
-
     return new Response(
       JSON.stringify({ error: message, details, requestId: finalCtx.requestId, code, traceId: finalCtx.trace.traceId }),
       {
