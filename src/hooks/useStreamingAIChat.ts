@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { PickData, GameData } from '../types';
 import { createParser } from 'eventsource-parser';
+import { detectSearchIntent, formatResultsForAI } from './useWebSearch';
 
 export interface ChatMessage {
   id: string;
@@ -42,9 +43,35 @@ Provide concise, insightful analysis. Do not ask the user which game they are re
     setIsLoading(true);
     setCurrentStream('');
 
+    // Step 1: Detect if we need web search
+    const searchIntent = detectSearchIntent(inputMessage);
+    let augmentedSystemPrompt = systemPrompt;
+
+    // Step 2: If search is needed, call web-search edge function
+    if (searchIntent.shouldSearch) {
+      try {
+        const { data: searchData, error: searchError } = await supabase.functions.invoke('web-search', {
+          body: { query: inputMessage, maxResults: 5 }
+        });
+
+        if (!searchError && searchData) {
+          const formattedResults = formatResultsForAI(searchData);
+          // Step 3: Prepend search results to system prompt
+          augmentedSystemPrompt = `LIVE WEB SEARCH RESULTS:
+${formattedResults}
+
+Use these results to answer. They are more current than your training data.
+
+${systemPrompt}`;
+        }
+      } catch (searchErr) {
+        console.warn('Web search failed, proceeding without:', searchErr);
+      }
+    }
+
     const previousMessages = messages.filter(m => m.role !== 'error');
     const messagesPayload = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: augmentedSystemPrompt },
       ...previousMessages.map(m => ({ role: m.role, content: m.content })),
       { role: 'user', content: userMsg.content },
     ];
