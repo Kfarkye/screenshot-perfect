@@ -43,19 +43,26 @@ Provide concise, insightful analysis. Do not ask the user which game they are re
     setIsLoading(true);
     setCurrentStream('');
 
-    // Step 1: Detect if we need web search
-    const searchIntent = detectSearchIntent(inputMessage);
-    console.log('[Web Search] Intent detection:', { 
-      query: inputMessage, 
-      shouldSearch: searchIntent.shouldSearch, 
-      category: searchIntent.category,
-      confidence: searchIntent.confidence 
-    });
+    // Step 1: Check local sports knowledge DB (instant, free)
+    const { getSportsKnowledge, formatKnowledgeForPrompt } = await import('./useSportsKnowledge');
+    const knowledgeEntries = await getSportsKnowledge(inputMessage);
     
     let augmentedSystemPrompt = systemPrompt;
+    
+    if (knowledgeEntries.length > 0) {
+      console.log('[Sports Knowledge] Using local DB:', knowledgeEntries.length, 'entries');
+      const knowledgeContext = formatKnowledgeForPrompt(knowledgeEntries);
+      augmentedSystemPrompt = systemPrompt + knowledgeContext;
+    }
 
-    // Step 2: If search is needed, call web-search edge function
-    if (searchIntent.shouldSearch) {
+    // Step 2: Detect if we need web search (only as fallback)
+    const searchIntent = detectSearchIntent(inputMessage);
+    const needsWebSearch = searchIntent.shouldSearch && knowledgeEntries.length === 0;
+    
+    console.log('[AI Chat] Knowledge DB:', knowledgeEntries.length, '| Web search needed:', needsWebSearch);
+
+    // Step 3: If DB didn't have answer AND search is needed, call web-search
+    if (needsWebSearch) {
       console.log('[Web Search] Calling edge function...');
       try {
         const { data: searchData, error: searchError } = await supabase.functions.invoke('web-search', {
