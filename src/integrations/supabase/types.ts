@@ -1782,6 +1782,66 @@ export type Database = {
         }
         Relationships: []
       }
+      nhl_games: {
+        Row: {
+          away_score: number | null
+          away_team: string
+          created_at: string | null
+          game_data: Json | null
+          game_date: string
+          game_id: string
+          home_score: number | null
+          home_team: string
+          id: string
+          period: number | null
+          period_time_remaining: string | null
+          season: string
+          season_type: string
+          start_time: string
+          status: string
+          updated_at: string | null
+          venue: string | null
+        }
+        Insert: {
+          away_score?: number | null
+          away_team: string
+          created_at?: string | null
+          game_data?: Json | null
+          game_date: string
+          game_id: string
+          home_score?: number | null
+          home_team: string
+          id?: string
+          period?: number | null
+          period_time_remaining?: string | null
+          season: string
+          season_type?: string
+          start_time: string
+          status?: string
+          updated_at?: string | null
+          venue?: string | null
+        }
+        Update: {
+          away_score?: number | null
+          away_team?: string
+          created_at?: string | null
+          game_data?: Json | null
+          game_date?: string
+          game_id?: string
+          home_score?: number | null
+          home_team?: string
+          id?: string
+          period?: number | null
+          period_time_remaining?: string | null
+          season?: string
+          season_type?: string
+          start_time?: string
+          status?: string
+          updated_at?: string | null
+          venue?: string | null
+        }
+        Relationships: []
+      }
       organization_usage: {
         Row: {
           alert_threshold_80: boolean | null
