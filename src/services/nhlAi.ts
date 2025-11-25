@@ -678,7 +678,7 @@ const sendViaRouter = async (
   const payload = {
     messages: messages,
     mode: "chat",
-    preferredProvider: "gemini",
+    preferredProvider: "auto", // Let router intelligently select based on availability
     stream: true, // Explicitly request streaming from the backend router
     // NO TOOLS - Web search disabled
     // Crucial addition: Ensure precision on the backend
