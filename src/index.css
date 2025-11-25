@@ -1,0 +1,313 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   ESSENCE DESIGN SYSTEM v3.0 - Jony Ive Edition
+   "Materiality, Precision, Empathy"
+   Healthcare Workforce Management Platform
+   ============================================================================ */
+
+@layer base {
+  :root {
+    /* ========== LIGHT MODE - Essence v3.0 ========== */
+    
+    /* Surface Tokens - Semantic Layers */
+    --essence-surface-canvas: 0 0% 98%;        /* Main background (Neutral.50) */
+    --essence-surface-primary: 0 0% 100%;      /* Cards, Modals (Neutral.0) */
+    --essence-surface-secondary: 0 0% 96%;     /* Hovers, subtle boundaries (Neutral.100) */
+    --essence-surface-tertiary: 0 0% 90%;      /* Borders, dividers (Neutral.200) */
+    
+    /* Content Tokens - Typography Colors */
+    --essence-content-primary: 220 13% 9%;     /* Main text (Neutral.900) */
+    --essence-content-secondary: 0 0% 32%;     /* Subtext (Neutral.600) */
+    --essence-content-tertiary: 0 0% 64%;      /* Disabled/Placeholder (Neutral.400) */
+    --essence-content-inverse: 0 0% 98%;       /* Text on dark surfaces (Neutral.50) */
+    
+    /* Accent Tokens - Primary Actions */
+    --essence-accent-default: 217 91% 60%;     /* Primary Blue (Blue.500) */
+    --essence-accent-hover: 217 91% 54%;       /* Deep Ocean (Blue.600) */
+    --essence-accent-text: 217 91% 60%;        /* Blue text */
+    
+    /* Semantic Tokens */
+    --essence-semantic-success: 160 84% 39%;   /* Green.600 */
+    --essence-semantic-warning: 38 92% 50%;    /* Amber.600 */
+    --essence-semantic-error: 0 84% 60%;       /* Red.500 */
+    
+    /* Glass Material - Light */
+    --essence-glass-surface: 0 0% 100% / 0.5;
+    --essence-glass-border: 0 0% 0% / 0.08;
+    
+    /* Shadows - Light Mode (Subtle) */
+    --essence-shadows-sm: 0 1px 3px hsl(0 0% 0% / 0.05), 0 1px 2px hsl(0 0% 0% / 0.1);
+    --essence-shadows-md: 0 10px 25px hsl(0 0% 0% / 0.08), 0 5px 10px hsl(0 0% 0% / 0.06);
+    --essence-shadows-lg: 0 30px 60px -10px hsl(0 0% 0% / 0.15);
+    
+    /* Core Color Palette (for utility classes) */
+    --essence-core-blue-50: 239 100% 97%;
+    --essence-core-blue-100: 219 100% 95%;
+    --essence-core-blue-300: 213 97% 79%;
+    --essence-core-blue-500: 217 91% 60%;
+    --essence-core-blue-600: 221 83% 53%;
+    --essence-core-blue-700: 224 76% 48%;
+    --essence-core-blue-800: 226 71% 40%;
+    --essence-core-blue-950: 224 64% 17%;
+    
+    --essence-core-neutral-0: 0 0% 100%;
+    --essence-core-neutral-50: 0 0% 98%;
+    --essence-core-neutral-100: 0 0% 96%;
+    --essence-core-neutral-200: 0 0% 90%;
+    --essence-core-neutral-400: 0 0% 64%;
+    --essence-core-neutral-600: 0 0% 32%;
+    --essence-core-neutral-700: 0 0% 25%;
+    --essence-core-neutral-800: 0 0% 15%;
+    --essence-core-neutral-900: 0 0% 9%;
+    --essence-core-neutral-950: 0 0% 4%;
+    
+    /* Shadcn Compatibility Layer */
+    --background: var(--essence-surface-canvas);
+    --foreground: var(--essence-content-primary);
+    --card: var(--essence-surface-primary);
+    --card-foreground: var(--essence-content-primary);
+    --popover: var(--essence-surface-primary);
+    --popover-foreground: var(--essence-content-primary);
+    --primary: var(--essence-accent-default);
+    --primary-foreground: var(--essence-content-inverse);
+    --secondary: var(--essence-surface-secondary);
+    --secondary-foreground: var(--essence-content-secondary);
+    --muted: var(--essence-surface-secondary);
+    --muted-foreground: var(--essence-content-secondary);
+    --accent: var(--essence-accent-default);
+    --accent-foreground: var(--essence-content-inverse);
+    --destructive: var(--essence-semantic-error);
+    --destructive-foreground: var(--essence-content-inverse);
+    --success: var(--essence-semantic-success);
+    --success-foreground: var(--essence-content-inverse);
+    --warning: var(--essence-semantic-warning);
+    --warning-foreground: var(--essence-content-inverse);
+    --border: var(--essence-surface-tertiary);
+    --input: var(--essence-surface-tertiary);
+    --ring: var(--essence-accent-default);
+    --radius: 1rem;
+    
+    /* Sidebar Tokens */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: var(--essence-content-primary);
+    --sidebar-primary: var(--essence-accent-default);
+    --sidebar-primary-foreground: var(--essence-content-inverse);
+    --sidebar-accent: var(--essence-surface-secondary);
+    --sidebar-accent-foreground: var(--essence-content-primary);
+    --sidebar-border: var(--essence-surface-tertiary);
+    --sidebar-ring: var(--essence-accent-default);
+    
+    /* Legacy Support */
+    --surface-highlight: var(--essence-surface-secondary);
+    --glass-surface: var(--essence-glass-surface);
+    --glass-border: var(--essence-glass-border);
+  }
+
+  .dark {
+    /* ========== DARK MODE - OLED Premium v3.0 ========== */
+    
+    /* Surface Tokens - Dark Semantic Layers */
+    --essence-surface-canvas: 0 0% 4%;         /* True Black OLED (Neutral.950) */
+    --essence-surface-primary: 0 0% 9%;        /* Cards, Modals (Neutral.900) */
+    --essence-surface-secondary: 0 0% 15%;     /* Hovers (Neutral.800) */
+    --essence-surface-tertiary: 0 0% 25%;      /* Borders (Neutral.700) */
+    
+    /* Content Tokens - Dark Typography */
+    --essence-content-primary: 0 0% 98%;       /* Main text (Neutral.50) */
+    --essence-content-secondary: 0 0% 64%;     /* Subtext (Neutral.400) */
+    --essence-content-tertiary: 0 0% 32%;      /* Disabled (Neutral.600) */
+    --essence-content-inverse: 0 0% 9%;        /* Text on light surfaces (Neutral.900) */
+    
+    /* Accent Tokens - Brighter for Dark Mode */
+    --essence-accent-default: 217 91% 60%;     /* Primary Blue (Blue.500) */
+    --essence-accent-hover: 213 97% 79%;       /* Lighter Blue (Blue.300) */
+    --essence-accent-text: 213 97% 79%;        /* Blue.400 */
+    
+    /* Semantic Tokens - Brighter for Contrast */
+    --essence-semantic-success: 160 84% 39%;   /* Green.500 */
+    --essence-semantic-warning: 38 92% 50%;    /* Amber.500 */
+    --essence-semantic-error: 0 84% 60%;       /* Red.500 */
+    
+    /* Glass Material - Dark (Smoked) */
+    --essence-glass-surface: 0 0% 9% / 0.4;
+    --essence-glass-border: 0 0% 100% / 0.1;
+    
+    /* Shadows - Dark Mode (Deeper) */
+    --essence-shadows-sm: 0 1px 3px hsl(0 0% 0% / 0.3), 0 1px 2px hsl(0 0% 0% / 0.2);
+    --essence-shadows-md: 0 10px 25px hsl(0 0% 0% / 0.4), 0 5px 10px hsl(0 0% 0% / 0.2);
+    --essence-shadows-lg: 0 30px 60px -10px hsl(0 0% 0% / 0.6);
+    
+    /* Shadcn Compatibility Layer - Dark */
+    --background: var(--essence-surface-canvas);
+    --foreground: var(--essence-content-primary);
+    --card: var(--essence-surface-primary);
+    --card-foreground: var(--essence-content-primary);
+    --popover: var(--essence-surface-secondary);
+    --popover-foreground: var(--essence-content-primary);
+    --primary: var(--essence-accent-default);
+    --primary-foreground: var(--essence-content-inverse);
+    --secondary: var(--essence-surface-secondary);
+    --secondary-foreground: var(--essence-content-primary);
+    --muted: var(--essence-surface-secondary);
+    --muted-foreground: var(--essence-content-secondary);
+    --accent: var(--essence-accent-default);
+    --accent-foreground: var(--essence-content-inverse);
+    --destructive: var(--essence-semantic-error);
+    --destructive-foreground: var(--essence-content-inverse);
+    --success: var(--essence-semantic-success);
+    --success-foreground: var(--essence-content-inverse);
+    --warning: var(--essence-semantic-warning);
+    --warning-foreground: var(--essence-content-inverse);
+    --border: var(--essence-surface-tertiary);
+    --input: var(--essence-surface-secondary);
+    --ring: var(--essence-accent-default);
+    
+    /* Sidebar Tokens - Dark */
+    --sidebar-background: 0 0% 4%;
+    --sidebar-foreground: var(--essence-content-primary);
+    --sidebar-primary: var(--essence-accent-default);
+    --sidebar-primary-foreground: var(--essence-content-inverse);
+    --sidebar-accent: var(--essence-surface-secondary);
+    --sidebar-accent-foreground: var(--essence-content-primary);
+    --sidebar-border: var(--essence-surface-tertiary);
+    --sidebar-ring: var(--essence-accent-default);
+    
+    /* Legacy Support */
+    --surface-highlight: var(--essence-surface-secondary);
+    --glass-surface: var(--essence-glass-surface);
+    --glass-border: var(--essence-glass-border);
+  }
+  
+  /* P3 Wide Gamut Support */
+  @media (color-gamut: p3) {
+    :root {
+      --essence-core-blue-500: 217 91% 60%;  /* Enhanced for P3 displays */
+      --essence-core-blue-600: 221 83% 53%;
+      --essence-accent-default: 217 91% 60%;
+      --essence-accent-hover: 221 83% 53%;
+    }
+  }
+  
+  /* ========== TYPOGRAPHY - SF Pro Precision ========== */
+  * {
+    @apply border-border;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    font-variation-settings: "opsz" auto;
+    letter-spacing: -0.011em;
+  }
+
+  
+  /* ========== FORMATTED CONTENT - Premium Typography ========== */
+  .formatted-content {
+    @apply text-foreground;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    font-feature-settings: "cv11", "ss01";
+    letter-spacing: -0.011em;
+  }
+  
+  .formatted-content p {
+    margin: 1.25rem 0;
+    line-height: 1.7;
+    font-size: 0.9375rem;
+    color: hsl(var(--foreground) / 0.9);
+  }
+  
+  .formatted-content p:last-child {
+    @apply mb-0;
+  }
+  
+  .formatted-content ul,
+  .formatted-content ol {
+    margin: 1.5rem 0;
+    padding-left: 2rem;
+    line-height: 1.7;
+  }
+  
+  .formatted-content li {
+    margin: 0.75rem 0;
+  }
+  
+  .formatted-content h1,
+  .formatted-content h2,
+  .formatted-content h3,
+  .formatted-content h4,
+  .formatted-content h5,
+  .formatted-content h6 {
+    margin-top: 2.5rem;
+    margin-bottom: 1.25rem;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: hsl(var(--foreground));
+  }
+  
+  .formatted-content h1 {
+    font-size: 2.25rem;
+    font-weight: 800;
+  }
+  
+  .formatted-content h2 {
+    font-size: 1.875rem;
+    font-weight: 700;
+  }
+  
+  .formatted-content h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+  
+  .formatted-content code {
+    font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
+    font-size: 0.875em;
+    padding: 0.2em 0.4em;
+    background: hsl(var(--muted));
+    border-radius: 0.375rem;
+  }
+  
+  .formatted-content pre {
+    margin: 1.75rem 0;
+    padding: 1.25rem;
+    background: hsl(var(--muted));
+    border-radius: 0.75rem;
+    overflow-x: auto;
+  }
+  
+  .formatted-content pre code {
+    padding: 0;
+    background: transparent;
+  }
+  
+  .formatted-content blockquote {
+    margin: 1.75rem 0;
+    padding-left: 1.5rem;
+    border-left: 4px solid hsl(var(--primary));
+    color: hsl(var(--muted-foreground));
+    font-style: italic;
+  }
+  
+  /* ========== GLASS MORPHISM ========== */
+  .glass {
+    background: hsl(var(--glass-surface));
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid hsl(var(--glass-border));
+  }
+  
+  .glass-strong {
+    background: hsl(var(--background) / 0.8);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid hsl(var(--border));
+  }
+}
