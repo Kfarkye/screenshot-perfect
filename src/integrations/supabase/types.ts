@@ -665,6 +665,7 @@ export type Database = {
           pick_side: string
           reasoning_embedding: string | null
           reasoning_text: string
+          sport: Database["public"]["Enums"]["sport_league"]
           updated_at: string
         }
         Insert: {
@@ -677,6 +678,7 @@ export type Database = {
           pick_side: string
           reasoning_embedding?: string | null
           reasoning_text: string
+          sport: Database["public"]["Enums"]["sport_league"]
           updated_at?: string
         }
         Update: {
@@ -689,6 +691,7 @@ export type Database = {
           pick_side?: string
           reasoning_embedding?: string | null
           reasoning_text?: string
+          sport?: Database["public"]["Enums"]["sport_league"]
           updated_at?: string
         }
         Relationships: []
@@ -3949,6 +3952,7 @@ export type Database = {
         | "offers"
       project_type: "vertical" | "clinician" | "general"
       run_status: "pending" | "running" | "success" | "error" | "cancelled"
+      sport_league: "NHL" | "NFL" | "NBA"
       urgency_level: "low" | "normal" | "high" | "urgent"
     }
     CompositeTypes: {
@@ -4120,6 +4124,7 @@ export const Constants = {
       ],
       project_type: ["vertical", "clinician", "general"],
       run_status: ["pending", "running", "success", "error", "cancelled"],
+      sport_league: ["NHL", "NFL", "NBA"],
       urgency_level: ["low", "normal", "high", "urgent"],
     },
   },
