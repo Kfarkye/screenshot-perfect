@@ -32,3 +32,6 @@ verify_jwt = true
 
 [functions.sync-sports-knowledge]
 verify_jwt = false
+
+[functions.sync-sports-knowledge-cron]
+verify_jwt = false
