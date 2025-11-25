@@ -263,39 +263,28 @@ async function executeSearch(
   const { provider = 'parallel', maxResults = 5, searchDepth = 'basic' } = options;
 
   // ─────────────────────────────────────────────────────────────────────────
-  // PARALLEL API (Best accuracy for AI agents)
+  // PARALLEL API (Via Supabase Edge Function for security)
   // ─────────────────────────────────────────────────────────────────────────
   if (provider === 'parallel') {
-    const response = await fetch('https://api.parallel.ai/v1beta/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': import.meta.env.VITE_PARALLEL_API_KEY || '',
-        'parallel-beta': 'search-extract-2025-10-10',
-      },
-      body: JSON.stringify({
-        objective: query,
-        search_queries: [query],
-        max_results: maxResults,
-        excerpts: {
-          max_chars_per_result: 5000,
-        },
-      }),
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      'https://luohiaujigqcjpzicxiz.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1b2hpYXVqaWdxY2pwemljeGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDA2MzEsImV4cCI6MjA2OTM3NjYzMX0.4pW5RXHUGaVe6acSxJbEN6Xd0qy7pxv-fua85GR4BbA'
+    );
+
+    const { data, error } = await supabase.functions.invoke('web-search', {
+      body: { query, maxResults },
     });
 
-    if (!response.ok) {
-      throw new Error(`Parallel search failed: ${response.status}`);
+    if (error) {
+      throw new Error(`Search failed: ${error.message}`);
     }
 
-    const data = await response.json();
+    if (!data || !data.results) {
+      throw new Error('No results returned from search');
+    }
 
-    return (data.results || []).map((r: any) => ({
-      title: r.title,
-      url: r.url,
-      snippet: r.excerpts?.[0] || '',
-      source: new URL(r.url).hostname.replace('www.', ''),
-      publishedAt: r.publish_date,
-    }));
+    return data.results;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
