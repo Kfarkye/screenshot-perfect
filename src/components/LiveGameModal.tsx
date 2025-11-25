@@ -43,7 +43,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
-import { useStreamingAIChat, ChatMessage } from '@/hooks/useStreamingAIChat';
+import { useStreamingAIChat, type Message } from '@/hooks/useStreamingAIChat';
 import { calculateEV } from '@/utils/bettingMath';
 import type { PickData, GameData, League } from '../types';
 
@@ -446,7 +446,7 @@ interface AIChatPanelProps {
   pick: PickData;
 }
 
-const ChatBubble: FC<{ message: ChatMessage | { content: string; role: 'stream' } }> = React.memo(({ message }) => (
+const ChatBubble: FC<{ message: Message | { content: string; role: 'stream' } }> = React.memo(({ message }) => (
   <div
     className={cn(
       'p-3 rounded-xl text-body-sm whitespace-pre-wrap transition-all duration-150',
@@ -464,19 +464,9 @@ const ChatBubble: FC<{ message: ChatMessage | { content: string; role: 'stream' 
 ChatBubble.displayName = 'ChatBubble';
 
 const AIChatPanel: FC<AIChatPanelProps> = ({ game, pick }) => {
-  // Convert LiveGameData to GameData for the hook
-  const gameData: GameData = {
-    ...game,
-    time: game.clock,
-    timestamp: game.startTime?.getTime() || Date.now(),
-    status: 'Live' as const,
-    odds: {},
-    homeScore: String(game.homeScore),
-    awayScore: String(game.awayScore),
-  };
-  
-  const { messages, isLoading, currentStream, sendMessage, chatEndRef, resetChat } = useStreamingAIChat(gameData, pick);
+  const { messages, isLoading, isStreaming, sendMessage, clear } = useStreamingAIChat();
   const [inputMessage, setInputMessage] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = useCallback(() => {
     if (inputMessage.trim() && !isLoading) {
@@ -509,7 +499,7 @@ const AIChatPanel: FC<AIChatPanelProps> = ({ game, pick }) => {
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={resetChat} 
+          onClick={clear} 
           disabled={isLoading}
           className="h-8 w-8 text-content-tertiary hover:text-content-primary"
         >
@@ -543,9 +533,13 @@ const AIChatPanel: FC<AIChatPanelProps> = ({ game, pick }) => {
             <ChatBubble key={msg.id} message={msg} />
           ))}
 
-          {currentStream && <ChatBubble message={{ content: currentStream, role: 'stream' }} />}
+          {isStreaming && messages.length > 0 && messages[messages.length - 1].role === 'assistant' && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-glass-surface text-content-tertiary mr-8 self-start">
+              <Loader2 className="h-4 w-4 animate-spin text-accent" />
+            </div>
+          )}
 
-          {isLoading && !currentStream && (
+          {isLoading && messages.length === 0 && (
             <div className="flex items-center gap-2 p-3 rounded-xl bg-glass-surface text-content-tertiary mr-8 self-start">
               <Loader2 className="h-4 w-4 animate-spin text-accent" />
               <span className="text-body-sm">Analyzing live data...</span>
