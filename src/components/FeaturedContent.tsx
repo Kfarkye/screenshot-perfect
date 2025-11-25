@@ -13,6 +13,7 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo, type FC, type RefObject } from "react";
 import { Clock, TrendingUp, PlayCircle, ChevronRight, ChevronLeft, CheckCircle2, Zap, BarChart3 } from "lucide-react";
 import type { League } from "../types";
+import { useFeaturedPicks } from "@/hooks/useFeaturedPicks";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPE DEFINITIONS
@@ -58,131 +59,7 @@ const cn = (...classes: (string | boolean | undefined | null)[]): string => {
   return classes.filter(Boolean).join(" ");
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ARTICLE DATA
-// ─────────────────────────────────────────────────────────────────────────────
-
-const ARTICLES: Readonly<Record<League, readonly Article[]>> = {
-  NHL: [
-    {
-      id: "nhl-1",
-      title: "Rangers vs. Devils: Sharp Money Targeting the Over",
-      author: "SharpEdge Staff",
-      timeAgo: "1h",
-      imageUrl: "https://images.unsplash.com/photo-1515703407324-5f753afd8be8?q=80&w=600&auto=format&fit=crop",
-      type: "Analysis",
-      league: "NHL",
-      tag: "Sharp Report",
-      confidence: 78,
-    },
-    {
-      id: "nhl-2",
-      title: "Goalie Props: Hellebuyck's Save Count Analysis",
-      author: "Dom Lucz",
-      timeAgo: "2h",
-      imageUrl: "https://images.unsplash.com/photo-1580748141549-71748dbe0bdc?q=80&w=600&auto=format&fit=crop",
-      type: "Props",
-      league: "NHL",
-      tag: "Player Props",
-      confidence: 72,
-    },
-    {
-      id: "nhl-3",
-      title: "Oilers Trends: McDavid Line Undervalued Tonight",
-      author: "Analytics Team",
-      timeAgo: "3h",
-      imageUrl: "https://images.unsplash.com/photo-1599307222108-6878b6680a65?q=80&w=600&auto=format&fit=crop",
-      type: "Analysis",
-      league: "NHL",
-      tag: "System Play",
-      isPremium: true,
-      confidence: 84,
-    },
-    {
-      id: "nhl-4",
-      title: "Tonight's Best Bets: 3 Picks for Loaded Slate",
-      author: "Action Network",
-      timeAgo: "4h",
-      imageUrl: "https://images.unsplash.com/photo-1551103212-f4728f321d5a?q=80&w=600&auto=format&fit=crop",
-      type: "Pick",
-      league: "NHL",
-      tag: "Best Bets",
-      confidence: 81,
-    },
-  ],
-  NFL: [
-    {
-      id: "nfl-1",
-      title: "Panthers vs. 49ers: Stuckey's MNF Spread Pick",
-      author: "Stuckey",
-      timeAgo: "1h",
-      imageUrl: "https://images.unsplash.com/photo-1628717341663-0007b0ee2597?q=80&w=600&auto=format&fit=crop",
-      type: "Pick",
-      league: "NFL",
-      tag: "Best Bets",
-      confidence: 76,
-      isPremium: true,
-    },
-    {
-      id: "nfl-2",
-      title: "Anderson's Early NFL Week 13 Angles",
-      author: "Brandon Anderson",
-      timeAgo: "1h",
-      imageUrl: "https://images.unsplash.com/photo-1566577739112-5180d4bf9390?q=80&w=600&auto=format&fit=crop",
-      type: "Analysis",
-      league: "NFL",
-      tag: "Early Look",
-      confidence: 69,
-    },
-    {
-      id: "nfl-3",
-      title: "NFL PrizePicks: Monday Night DFS Plays",
-      author: "Doug Ziefel",
-      timeAgo: "3h",
-      imageUrl: "https://images.unsplash.com/photo-1598550476439-6847785fcea6?q=80&w=600&auto=format&fit=crop",
-      type: "Props",
-      league: "NFL",
-      tag: "DFS / Props",
-      confidence: 74,
-    },
-    {
-      id: "nfl-4",
-      title: "Public Betting: Where the Squares Lean",
-      author: "Market Insights",
-      timeAgo: "5h",
-      imageUrl: "https://images.unsplash.com/photo-1518605348400-43ded60bdf08?q=80&w=600&auto=format&fit=crop",
-      type: "Analysis",
-      league: "NFL",
-      tag: "Fade Public",
-      confidence: 67,
-    },
-  ],
-  NBA: [
-    {
-      id: "nba-1",
-      title: "Lakers vs. Warriors: LeBron Prop Discrepancy",
-      author: "PropMaster",
-      timeAgo: "30m",
-      imageUrl: "https://images.unsplash.com/photo-1504450758481-7338eba7524a?q=80&w=600&auto=format&fit=crop",
-      type: "Props",
-      league: "NBA",
-      tag: "Prop Edge",
-      confidence: 82,
-      isPremium: true,
-    },
-    {
-      id: "nba-2",
-      title: "Celtics Spread: Identifying the Inflation",
-      author: "SharpEdge AI",
-      timeAgo: "2h",
-      imageUrl: "https://images.unsplash.com/photo-1519861531473-920026393112?q=80&w=600&auto=format&fit=crop",
-      type: "Analysis",
-      league: "NBA",
-      tag: "Model Pick",
-      confidence: 79,
-    },
-  ],
-} as const;
+// Removed static ARTICLES - now fetching live data
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UTILITIES
@@ -426,8 +303,7 @@ NavButton.displayName = "NavButton";
 export const FeaturedContent: FC<FeaturedContentProps> = ({ league, onArticleClick, className = "" }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { canScrollLeft, canScrollRight, scroll } = useHorizontalScroll(scrollRef);
-
-  const articles = useMemo(() => ARTICLES[league] ?? ARTICLES.NHL, [league]);
+  const { picks: articles, loading } = useFeaturedPicks(league);
 
   const handleArticleClick = useCallback(
     (title: string) => {
@@ -498,14 +374,28 @@ export const FeaturedContent: FC<FeaturedContentProps> = ({ league, onArticleCli
           WebkitOverflowScrolling: "touch",
         }}
       >
-        {articles.map((article, index) => (
-          <ArticleCard
-            key={article.id}
-            article={article}
-            index={index}
-            onClick={() => handleArticleClick(article.title)}
-          />
-        ))}
+        {loading ? (
+          // Loading skeleton
+          Array.from({ length: 4 }).map((_, idx) => (
+            <div
+              key={`skeleton-${idx}`}
+              className="flex-shrink-0 w-[280px] md:w-[320px] h-[248px] rounded-2xl bg-surface-secondary animate-pulse"
+            />
+          ))
+        ) : articles.length === 0 ? (
+          <div className="w-full text-center py-8 text-content-tertiary">
+            No premium picks available yet. Check back soon!
+          </div>
+        ) : (
+          articles.map((article, index) => (
+            <ArticleCard
+              key={article.id}
+              article={article}
+              index={index}
+              onClick={() => handleArticleClick(article.title)}
+            />
+          ))
+        )}
       </div>
 
       {/* Edge fade indicators */}
