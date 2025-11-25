@@ -452,12 +452,9 @@ const ChatBubble: FC<{ message: ChatMessage | { content: string; role: 'stream' 
       'p-3 rounded-xl text-body-sm whitespace-pre-wrap transition-all duration-150',
       message.role === 'user' && 'bg-accent text-content-inverse ml-8 self-end shadow-md',
       (message.role === 'assistant' || message.role === 'stream') && 
-        'bg-glass-surface text-content-primary mr-8 self-start shadow-sm border border-glass-border',
-      message.role === 'error' && 
-        'bg-semantic-error/10 text-semantic-error mr-8 border border-semantic-error/30 flex items-start gap-2'
+        'bg-glass-surface text-content-primary mr-8 self-start shadow-sm border border-glass-border'
     )}
   >
-    {message.role === 'error' && <AlertTriangle size={16} className="mt-0.5 shrink-0" />}
     {message.content}
     {message.role === 'stream' && (
       <span className="inline-block w-1 h-4 bg-accent ml-1 align-text-bottom animate-pulse" />
