@@ -149,7 +149,7 @@ function throttle<T extends (...args: any[]) => void>(func: T, limit: number): T
 // ════════════════════════════════════════════════════════════════════════════
 
 export type Intent = 'casual' | 'analysis' | 'research';
-export type ModelId = 'google/gemini-2.5-flash' | 'google/gemini-2.5-pro';
+export type ModelId = 'gemini-3-pro-preview';
 
 export interface RouteResult {
   intent: Intent;
@@ -338,7 +338,7 @@ export function routeMessage(message: string): RouteResult {
   if (researchPatterns.some(p => p.test(lower))) {
     return {
       intent: 'research',
-      model: 'google/gemini-2.5-pro',
+      model: 'gemini-3-pro-preview',
       injectKnowledge: true,
       useWebSearch: false,
     };
@@ -347,7 +347,7 @@ export function routeMessage(message: string): RouteResult {
   if (analysisPatterns.some(p => p.test(lower))) {
     return {
       intent: 'analysis',
-      model: 'google/gemini-2.5-pro',
+      model: 'gemini-3-pro-preview',
       injectKnowledge: true,
       useWebSearch: false,
     };
@@ -356,7 +356,7 @@ export function routeMessage(message: string): RouteResult {
   if (knowledgePatterns.some(p => p.test(lower))) {
     return {
       intent: 'analysis',
-      model: 'google/gemini-2.5-pro',
+      model: 'gemini-3-pro-preview',
       injectKnowledge: true,
       useWebSearch: false,
     };
@@ -364,7 +364,7 @@ export function routeMessage(message: string): RouteResult {
   
   return {
     intent: 'casual',
-    model: 'google/gemini-2.5-flash',
+    model: 'gemini-3-pro-preview',
     injectKnowledge: false,
     useWebSearch: false,
   };
