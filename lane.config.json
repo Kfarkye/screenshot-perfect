@@ -1,0 +1,295 @@
+{
+  "schema": {
+    "appName": "SharpEdge Pro Terminal",
+    "description": "Institutional-grade sports betting analytics platform with Real-time odds, AI pick generation, and RAG-based chat.",
+    "themeColor": "#0f172a",
+    "tables": [
+      {
+        "name": "profiles",
+        "description": "User profiles and subscription status.",
+        "rlsPolicies": {
+          "read": "auth.uid() = user_id",
+          "write": "auth.uid() = user_id"
+        },
+        "fields": [
+          {
+            "name": "user_id",
+            "type": "relation",
+            "label": "User",
+            "relation": {
+              "table": "auth.users",
+              "type": "one_to_one",
+              "displayField": "email"
+            },
+            "required": true
+          },
+          {
+            "name": "subscription_tier",
+            "type": "select",
+            "label": "Subscription Tier",
+            "options": [
+              "free",
+              "pro",
+              "institutional"
+            ],
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "nfl_games",
+        "description": "NFL game schedule, live scores, and status.",
+        "rlsPolicies": {
+          "read": "true",
+          "write": "auth.role() = 'service_role'"
+        },
+        "fields": [
+          {
+            "name": "home_team",
+            "type": "string",
+            "label": "Home Team",
+            "required": true
+          },
+          {
+            "name": "away_team",
+            "type": "string",
+            "label": "Away Team",
+            "required": true
+          },
+          {
+            "name": "game_time",
+            "type": "date",
+            "label": "Game Time",
+            "required": true
+          },
+          {
+            "name": "status",
+            "type": "select",
+            "label": "Status",
+            "options": [
+              "scheduled",
+              "in_progress",
+              "final",
+              "postponed"
+            ],
+            "required": true
+          },
+          {
+            "name": "home_score",
+            "type": "number",
+            "label": "Home Score",
+            "required": false
+          },
+          {
+            "name": "away_score",
+            "type": "number",
+            "label": "Away Score",
+            "required": false
+          },
+          {
+            "name": "season_type",
+            "type": "select",
+            "label": "Season Type",
+            "options": [
+              "preseason",
+              "regular",
+              "postseason"
+            ],
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "betting_lines",
+        "description": "Current betting lines for games from various sportsbooks.",
+        "rlsPolicies": {
+          "read": "true",
+          "write": "auth.role() = 'service_role'"
+        },
+        "fields": [
+          {
+            "name": "game_id",
+            "type": "relation",
+            "label": "Game",
+            "relation": {
+              "table": "nfl_games",
+              "type": "many_to_one",
+              "displayField": "home_team"
+            },
+            "required": true
+          },
+          {
+            "name": "sportsbook",
+            "type": "string",
+            "label": "Sportsbook",
+            "required": true
+          },
+          {
+            "name": "market_type",
+            "type": "select",
+            "label": "Market Type",
+            "options": [
+              "moneyline",
+              "spread",
+              "total"
+            ],
+            "required": true
+          },
+          {
+            "name": "price_home",
+            "type": "number",
+            "label": "Price Home (Odds)",
+            "required": true
+          },
+          {
+            "name": "price_away",
+            "type": "number",
+            "label": "Price Away (Odds)",
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "analysis_memory",
+        "description": "AI-generated picks and reasoning with vector embeddings for RAG.",
+        "rlsPolicies": {
+          "read": "true",
+          "write": "auth.role() = 'service_role'"
+        },
+        "fields": [
+          {
+            "name": "game_id",
+            "type": "relation",
+            "label": "Game",
+            "relation": {
+              "table": "nfl_games",
+              "type": "one_to_one",
+              "displayField": "home_team"
+            },
+            "required": true
+          },
+          {
+            "name": "pick_recommendation",
+            "type": "string",
+            "label": "Pick",
+            "required": true
+          },
+          {
+            "name": "confidence_score",
+            "type": "number",
+            "label": "Confidence (0-100)",
+            "required": true
+          },
+          {
+            "name": "reasoning_text",
+            "type": "string",
+            "label": "Reasoning",
+            "required": true
+          },
+          {
+            "name": "ev_value",
+            "type": "number",
+            "label": "Expected Value",
+            "required": false
+          },
+          {
+            "name": "embedding",
+            "type": "json",
+            "label": "Vector Embedding",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "ai_conversations",
+        "description": "User chat sessions with the AI analyst.",
+        "rlsPolicies": {
+          "read": "auth.uid() = user_id",
+          "write": "auth.uid() = user_id"
+        },
+        "fields": [
+          {
+            "name": "user_id",
+            "type": "relation",
+            "label": "User",
+            "relation": {
+              "table": "profiles",
+              "type": "many_to_one",
+              "displayField": "email"
+            },
+            "required": true
+          },
+          {
+            "name": "title",
+            "type": "string",
+            "label": "Topic",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "ai_messages",
+        "description": "Individual messages within a conversation.",
+        "rlsPolicies": {
+          "read": "auth.uid() = (SELECT user_id FROM ai_conversations WHERE id = conversation_id)",
+          "write": "auth.uid() = (SELECT user_id FROM ai_conversations WHERE id = conversation_id)"
+        },
+        "fields": [
+          {
+            "name": "conversation_id",
+            "type": "relation",
+            "label": "Conversation",
+            "relation": {
+              "table": "ai_conversations",
+              "type": "many_to_one",
+              "displayField": "title"
+            },
+            "required": true
+          },
+          {
+            "name": "role",
+            "type": "select",
+            "label": "Role",
+            "options": [
+              "user",
+              "assistant"
+            ],
+            "required": true
+          },
+          {
+            "name": "content",
+            "type": "string",
+            "label": "Content",
+            "required": true
+          }
+        ]
+      }
+    ],
+    "functions": [
+      {
+        "name": "fetch-odds",
+        "description": "Fetches real-time betting lines from The Odds API.",
+        "trigger": "http",
+        "method": "POST",
+        "code": "import { serve } from \"https://deno.land/std@0.168.0/http/server.ts\";\n\nserve(async (req) => {\n  const { sport, daysFrom } = await req.json();\n  const apiKey = Deno.env.get('ODDS_API_KEY');\n  \n  if (!apiKey) return new Response(\"Missing API Key\", { status: 500 });\n\n  const response = await fetch(`https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=us&markets=h2h,spreads&oddsFormat=american`);\n  const data = await response.json();\n\n  return new Response(JSON.stringify(data), { headers: { \"Content-Type\": \"application/json\" } });\n});"
+      },
+      {
+        "name": "generate-pick",
+        "description": "Generates an AI pick for a specific game using Gemini and stats.",
+        "trigger": "http",
+        "method": "POST",
+        "code": "import { serve } from \"https://deno.land/std@0.168.0/http/server.ts\";\n\nserve(async (req) => {\n  const { gameId, context } = await req.json();\n  const geminiKey = Deno.env.get('GEMINI_API_KEY');\n  \n  // Simplified Gemini call mock\n  const prompt = `Analyze this NFL game: ${JSON.stringify(context)}. Provide a betting pick, confidence score, and reasoning.`;\n  \n  const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiKey}`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })\n  });\n\n  const result = await aiResponse.json();\n  return new Response(JSON.stringify(result), { headers: { \"Content-Type\": \"application/json\" } });\n});"
+      },
+      {
+        "name": "ai-chat-router",
+        "description": "Handles streaming chat with RAG context lookup.",
+        "trigger": "http",
+        "method": "POST",
+        "code": "import { serve } from \"https://deno.land/std@0.168.0/http/server.ts\";\n\nserve(async (req) => {\n  const { message, history } = await req.json();\n  // Logic for RAG lookup in 'analysis_memory' and streaming response would go here\n  \n  return new Response(JSON.stringify({ reply: \"AI analysis stream...\" }), { headers: { \"Content-Type\": \"application/json\" } });\n});"
+      }
+    ]
+  },
+  "version": "1.0",
+  "generatedAt": "2025-11-25T15:13:37.186Z",
+  "secrets": []
+}
