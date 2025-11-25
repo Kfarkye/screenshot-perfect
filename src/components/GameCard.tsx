@@ -3,6 +3,8 @@ import type { GameData, MarketData, PickData } from "../types";
 // PickDisplay and PickDetailModal are defined later in the file for cohesive updates
 // import { PickDisplay } from "./PickDisplay";
 // import { PickDetailModal } from "./PickDetailModal";
+import { LiveGameModal } from "./LiveGameModal";
+import { useLiveGame, useGameModalType } from "@/hooks/useLiveGame";
 import { useToast } from "../hooks/use-toast";
 // Assuming these UI components are available in the project based on the original code context
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
